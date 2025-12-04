@@ -50,7 +50,10 @@ def train_epoch(model, train_loader, optimizer, scheduler, device, epoch,
         
         # Forward pass with mixed precision
         if use_amp:
-            with autocast(enabled=True, dtype=torch.float16 if torch.cuda.is_available() else torch.bfloat16):
+            # Use FP16 on CUDA, BF16 on CPU or if preferred
+            # BF16 is better for training stability but requires newer hardware
+            dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+            with autocast(enabled=True, dtype=dtype):
                 outputs = model.forward(input_ids, attention_mask, labels)
                 loss = outputs.loss / gradient_accumulation_steps
             
@@ -101,7 +104,9 @@ def validate(model, val_loader, device, use_amp=True):
             
             # Forward pass with mixed precision
             if use_amp:
-                with autocast(enabled=True, dtype=torch.float16 if torch.cuda.is_available() else torch.bfloat16):
+                # Use FP16 on CUDA for validation
+                dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+                with autocast(enabled=True, dtype=dtype):
                     outputs = model.forward(input_ids, attention_mask, labels)
                     loss = outputs.loss
             else:

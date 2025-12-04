@@ -19,7 +19,7 @@ def quantize_model(model, quantization_type="int8"):
         Quantized model
     """
     if quantization_type == "int8":
-        # Static int8 quantization
+        # Dynamic int8 quantization (quantizes at runtime)
         try:
             # For PyTorch 2.0+, use quantization
             quantized_model = torch.quantization.quantize_dynamic(

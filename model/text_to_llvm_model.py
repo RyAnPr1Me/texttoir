@@ -14,7 +14,6 @@ from transformers import (
     T5Config
 )
 import torch
-from functools import lru_cache
 
 
 class TextToLLVMModel:
