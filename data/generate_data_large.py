@@ -1300,33 +1300,21 @@ declare i32 @llvm.bswap.i32(i32)"""
         """Generate variable argument function examples."""
         examples = []
         
-        # Basic varargs
-        text = "Function with variable arguments using va_start"
-        ir = """define i32 @sum_varargs(i32 %count, ...) {
+        # Note: Varargs in LLVM IR are complex and platform-specific.
+        # We'll focus on the declaration and basic usage pattern.
+        
+        # Simple varargs declaration (common pattern)
+        text = "Declare variadic function (printf-style)"
+        ir = """declare i32 @printf(i8*, ...)
+
+define void @print_numbers(i32 %a, i32 %b) {
 entry:
-  %va = alloca i8*
-  %va_cast = bitcast i8** %va to i8*
-  call void @llvm.va_start(i8* %va_cast)
-  
-  br label %loop
-
-loop:
-  %i = phi i32 [ 0, %entry ], [ %i_next, %loop ]
-  %sum = phi i32 [ 0, %entry ], [ %sum_next, %loop ]
-  
-  %arg_ptr = va_arg i8** %va, i32
-  %sum_next = add i32 %sum, %arg_ptr
-  %i_next = add i32 %i, 1
-  %cmp = icmp slt i32 %i_next, %count
-  br i1 %cmp, label %loop, label %end
-
-end:
-  call void @llvm.va_end(i8* %va_cast)
-  ret i32 %sum
+  %fmt = getelementptr [14 x i8], [14 x i8]* @.str, i32 0, i32 0
+  call i32 (i8*, ...) @printf(i8* %fmt, i32 %a, i32 %b)
+  ret void
 }
 
-declare void @llvm.va_start(i8*)
-declare void @llvm.va_end(i8*)"""
+@.str = private constant [14 x i8] c"Values: %d %d\\00\""""
         self._add_example(examples, text, ir, "GOOD")
         
         return examples
