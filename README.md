@@ -75,6 +75,35 @@ This generates a comprehensive dataset (~1GB, 500K+ examples) with:
   - Integer overflow without checks
 - **Quality markers**: Each example tagged as "GOOD" or "BAD" in the dataset
 
+**Customization Options:**
+
+The large data generator now supports command-line arguments for full control:
+
+```bash
+# Generate custom-sized dataset
+python data/generate_data_large.py --target-examples 100000 --output-dir my_dataset
+
+# Quick test with 1000 examples
+python data/generate_data_large.py --quick-test
+
+# Customize splits and variations
+python data/generate_data_large.py \
+  --target-examples 50000 \
+  --train-split 0.7 \
+  --val-split 0.15 \
+  --variations-per-example 15 \
+  --seed 123
+```
+
+**Available options:**
+- `--target-examples N`: Number of examples to generate (default: 500000)
+- `--output-dir DIR`: Output directory (default: dataset)
+- `--variations-per-example N`: Text variations per base example (default: 10)
+- `--train-split F`: Training data proportion (default: 0.8)
+- `--val-split F`: Validation data proportion (default: 0.1)
+- `--seed N`: Random seed for reproducibility (default: 42)
+- `--quick-test`: Generate 1000 examples for quick testing
+
 The large dataset covers:
 - Arithmetic (all ops × all int/float types)
 - Comparisons (signed, unsigned, ordered, unordered)
