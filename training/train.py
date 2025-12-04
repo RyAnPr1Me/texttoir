@@ -4,14 +4,16 @@ Training script for text-to-LLVM IR model.
 
 import argparse
 import os
+import sys
+from pathlib import Path
 import torch
 from torch.optim import AdamW
 from transformers import get_linear_schedule_with_warmup
 from tqdm import tqdm
-import sys
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add parent directory to path for imports
+parent_dir = Path(__file__).parent.parent.absolute()
+sys.path.insert(0, str(parent_dir))
 
 from model import create_model
 from utils import create_dataloaders, save_checkpoint
@@ -141,11 +143,26 @@ def main(args):
             best_val_loss = val_loss
             print(f"New best validation loss! Saving model...")
             model.save(args.output_dir)
+            # Also save training state for resumption
+            save_checkpoint(
+                model.get_model(),
+                optimizer,
+                epoch,
+                val_loss,
+                os.path.join(args.output_dir, "training_state")
+            )
         
-        # Save periodic checkpoint
+        # Save periodic checkpoint with full training state
         if epoch % args.save_every == 0:
             checkpoint_dir = os.path.join(args.output_dir, f"checkpoint-epoch-{epoch}")
             model.save(checkpoint_dir)
+            save_checkpoint(
+                model.get_model(),
+                optimizer,
+                epoch,
+                val_loss,
+                checkpoint_dir
+            )
     
     print(f"\n{'=' * 50}")
     print("Training completed!")

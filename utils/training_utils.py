@@ -4,7 +4,6 @@ Training utilities and helper functions.
 
 import os
 import torch
-from tqdm import tqdm
 
 
 def save_checkpoint(model, optimizer, epoch, loss, output_dir):
@@ -42,7 +41,7 @@ def load_checkpoint(checkpoint_path, model, optimizer=None):
     Returns:
         Tuple of (epoch, loss)
     """
-    checkpoint = torch.load(checkpoint_path)
+    checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=True)
     model.load_state_dict(checkpoint['model_state_dict'])
     
     if optimizer is not None:

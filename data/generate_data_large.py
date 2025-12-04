@@ -7,7 +7,6 @@ Includes edge cases, good and bad code with quality markings.
 import json
 import random
 import os
-import itertools
 import hashlib
 from typing import List, Tuple, Dict, Set
 

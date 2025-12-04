@@ -5,9 +5,11 @@ Inference script for text-to-LLVM IR model.
 import argparse
 import os
 import sys
+from pathlib import Path
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add parent directory to path for imports
+parent_dir = Path(__file__).parent.absolute()
+sys.path.insert(0, str(parent_dir))
 
 from model import create_model
 

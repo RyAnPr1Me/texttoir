@@ -92,12 +92,15 @@ def create_dataloaders(
     train_dataset = LLVMDataset(train_path, tokenizer, max_length)
     val_dataset = LLVMDataset(val_path, tokenizer, max_length)
     
+    # Only use pinned memory if CUDA is available
+    use_pinned_memory = torch.cuda.is_available()
+    
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
-        pin_memory=True
+        pin_memory=use_pinned_memory
     )
     
     val_loader = DataLoader(
@@ -105,7 +108,7 @@ def create_dataloaders(
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
-        pin_memory=True
+        pin_memory=use_pinned_memory
     )
     
     return train_loader, val_loader
