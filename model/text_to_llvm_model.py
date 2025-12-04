@@ -1,6 +1,11 @@
 """
 Model architecture for text-to-LLVM IR translation.
 Uses T5-small for optimal balance of accuracy and speed.
+Optimized for best quality AI in least time with:
+- Mixed precision training (FP16)
+- Gradient checkpointing for memory efficiency
+- Optimized generation parameters
+- Model compilation support
 """
 
 from transformers import (
@@ -17,22 +22,47 @@ class TextToLLVMModel:
     T5-small provides good translation accuracy with fast training/inference.
     """
     
-    def __init__(self, model_name: str = "t5-small", max_length: int = 512):
+    def __init__(self, model_name: str = "t5-small", max_length: int = 512, 
+                 use_gradient_checkpointing: bool = True, compile_model: bool = False):
         """
-        Initialize the model.
+        Initialize the model with optimization features.
         
         Args:
             model_name: Base model to use (t5-small is optimal for this task)
             max_length: Maximum sequence length
+            use_gradient_checkpointing: Enable gradient checkpointing to save memory
+            compile_model: Use torch.compile for faster inference (PyTorch 2.0+)
         """
         self.model_name = model_name
         self.max_length = max_length
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.use_gradient_checkpointing = use_gradient_checkpointing
         
-        # Initialize tokenizer and model
-        self.tokenizer = T5Tokenizer.from_pretrained(model_name)
+        # Initialize tokenizer with optimized settings
+        self.tokenizer = T5Tokenizer.from_pretrained(
+            model_name,
+            model_max_length=max_length
+        )
+        
+        # Initialize model
         self.model = T5ForConditionalGeneration.from_pretrained(model_name)
+        
+        # Enable gradient checkpointing for memory efficiency during training
+        if use_gradient_checkpointing:
+            self.model.gradient_checkpointing_enable()
+        
         self.model.to(self.device)
+        
+        # Compile model for faster inference (PyTorch 2.0+)
+        if compile_model and hasattr(torch, 'compile'):
+            try:
+                self.model = torch.compile(self.model, mode="reduce-overhead")
+                print("Model compiled with torch.compile for faster inference")
+            except Exception as e:
+                print(f"Warning: Could not compile model: {e}")
+        
+        # Cache for repeated inputs
+        self._generation_cache = {}
     
     def preprocess(self, text: str, llvm_ir: str = None):
         """
@@ -99,18 +129,30 @@ class TextToLLVMModel:
             labels=labels
         )
     
-    def generate(self, text: str, num_beams: int = 4, max_new_tokens: int = 512):
+    def generate(self, text: str, num_beams: int = 5, max_new_tokens: int = 512,
+                 temperature: float = 0.7, top_k: int = 50, top_p: float = 0.95,
+                 use_cache: bool = True, repetition_penalty: float = 1.2):
         """
-        Generate LLVM IR from input text.
+        Generate LLVM IR from input text with optimized parameters.
         
         Args:
             text: Input text description
-            num_beams: Number of beams for beam search
+            num_beams: Number of beams for beam search (higher = better quality, slower)
             max_new_tokens: Maximum tokens to generate
+            temperature: Sampling temperature (lower = more deterministic)
+            top_k: Top-k sampling parameter
+            top_p: Top-p (nucleus) sampling parameter
+            use_cache: Use caching for repeated inputs
+            repetition_penalty: Penalty for repeating tokens
             
         Returns:
             Generated LLVM IR code
         """
+        # Check cache for repeated inputs
+        cache_key = (text, num_beams, max_new_tokens, temperature)
+        if use_cache and cache_key in self._generation_cache:
+            return self._generation_cache[cache_key]
+        
         self.model.eval()
         
         # Preprocess input
@@ -118,19 +160,33 @@ class TextToLLVMModel:
         input_ids = inputs["input_ids"].to(self.device)
         attention_mask = inputs["attention_mask"].to(self.device)
         
-        # Generate
+        # Generate with optimized parameters
         with torch.no_grad():
-            outputs = self.model.generate(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                max_new_tokens=max_new_tokens,
-                num_beams=num_beams,
-                early_stopping=True,
-                no_repeat_ngram_size=2
-            )
+            # Use mixed precision for faster inference
+            with torch.cuda.amp.autocast(enabled=torch.cuda.is_available()):
+                outputs = self.model.generate(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    max_new_tokens=max_new_tokens,
+                    num_beams=num_beams,
+                    temperature=temperature,
+                    top_k=top_k,
+                    top_p=top_p,
+                    do_sample=False if num_beams > 1 else True,  # Use sampling for greedy, beam for quality
+                    early_stopping=True,
+                    no_repeat_ngram_size=3,  # Prevent repetition
+                    repetition_penalty=repetition_penalty,
+                    length_penalty=1.0,  # Neutral length preference
+                    num_return_sequences=1
+                )
         
         # Decode output
         generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+        
+        # Cache result
+        if use_cache and len(self._generation_cache) < 100:  # Limit cache size
+            self._generation_cache[cache_key] = generated_text
+        
         return generated_text
     
     def save(self, output_dir: str):
@@ -143,6 +199,11 @@ class TextToLLVMModel:
         """Load model and tokenizer from directory."""
         self.model = T5ForConditionalGeneration.from_pretrained(model_dir)
         self.tokenizer = T5Tokenizer.from_pretrained(model_dir)
+        
+        # Re-enable gradient checkpointing if needed
+        if self.use_gradient_checkpointing:
+            self.model.gradient_checkpointing_enable()
+        
         self.model.to(self.device)
         print(f"Model loaded from {model_dir}")
     
@@ -155,15 +216,23 @@ class TextToLLVMModel:
         return self.tokenizer
 
 
-def create_model(model_name: str = "t5-small", max_length: int = 512):
+def create_model(model_name: str = "t5-small", max_length: int = 512,
+                 use_gradient_checkpointing: bool = True, compile_model: bool = False):
     """
-    Factory function to create a TextToLLVMModel.
+    Factory function to create an optimized TextToLLVMModel.
     
     Args:
         model_name: Base model name
         max_length: Maximum sequence length
+        use_gradient_checkpointing: Enable gradient checkpointing for memory efficiency
+        compile_model: Use torch.compile for faster inference
         
     Returns:
-        TextToLLVMModel instance
+        Optimized TextToLLVMModel instance
     """
-    return TextToLLVMModel(model_name=model_name, max_length=max_length)
+    return TextToLLVMModel(
+        model_name=model_name,
+        max_length=max_length,
+        use_gradient_checkpointing=use_gradient_checkpointing,
+        compile_model=compile_model
+    )

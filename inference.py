@@ -1,5 +1,6 @@
 """
 Inference script for text-to-LLVM IR model.
+Optimized for best quality and speed.
 """
 
 import argparse
@@ -15,9 +16,14 @@ from model import create_model
 
 
 def main(args):
-    """Run inference on input text."""
+    """Run inference on input text with optimizations."""
     print("Loading model...")
-    model = create_model(model_name=args.model_name, max_length=args.max_length)
+    model = create_model(
+        model_name=args.model_name,
+        max_length=args.max_length,
+        use_gradient_checkpointing=False,  # Not needed for inference
+        compile_model=args.compile_model  # Use compilation for faster inference
+    )
     
     # Load trained model if checkpoint exists
     if os.path.exists(args.model_path):
@@ -45,7 +51,12 @@ def main(args):
                 llvm_ir = model.generate(
                     text,
                     num_beams=args.num_beams,
-                    max_new_tokens=args.max_new_tokens
+                    max_new_tokens=args.max_new_tokens,
+                    temperature=args.temperature,
+                    top_k=args.top_k,
+                    top_p=args.top_p,
+                    use_cache=args.use_cache,
+                    repetition_penalty=args.repetition_penalty
                 )
                 
                 print("\nGenerated LLVM IR:")
@@ -70,7 +81,12 @@ def main(args):
         llvm_ir = model.generate(
             args.text,
             num_beams=args.num_beams,
-            max_new_tokens=args.max_new_tokens
+            max_new_tokens=args.max_new_tokens,
+            temperature=args.temperature,
+            top_k=args.top_k,
+            top_p=args.top_p,
+            use_cache=args.use_cache,
+            repetition_penalty=args.repetition_penalty
         )
         
         print("\nGenerated LLVM IR:")
@@ -108,8 +124,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_beams",
         type=int,
-        default=4,
-        help="Number of beams for beam search"
+        default=5,
+        help="Number of beams for beam search (higher = better quality)"
     )
     parser.add_argument(
         "--max_new_tokens",
@@ -122,6 +138,42 @@ if __name__ == "__main__":
         type=int,
         default=512,
         help="Maximum sequence length"
+    )
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=0.7,
+        help="Sampling temperature (lower = more deterministic)"
+    )
+    parser.add_argument(
+        "--top_k",
+        type=int,
+        default=50,
+        help="Top-k sampling parameter"
+    )
+    parser.add_argument(
+        "--top_p",
+        type=float,
+        default=0.95,
+        help="Top-p (nucleus) sampling parameter"
+    )
+    parser.add_argument(
+        "--repetition_penalty",
+        type=float,
+        default=1.2,
+        help="Penalty for repeating tokens"
+    )
+    parser.add_argument(
+        "--use_cache",
+        action="store_true",
+        default=True,
+        help="Use caching for repeated inputs"
+    )
+    parser.add_argument(
+        "--compile_model",
+        action="store_true",
+        default=False,
+        help="Compile model with torch.compile for faster inference (PyTorch 2.0+)"
     )
     
     args = parser.parse_args()
