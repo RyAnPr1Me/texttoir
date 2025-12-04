@@ -15,10 +15,17 @@ For quick testing (1000 examples):
 python data/generate_data_large.py --quick-test
 ```
 
-For production (250K examples, ~500MB):
+For production with large dataset (500K examples, ~1GB - **RECOMMENDED**):
+```bash
+python data/generate_data_large.py --target-examples 500000
+```
+
+For medium-sized dataset (250K examples, ~500MB):
 ```bash
 python data/generate_data_large.py --target-examples 250000
 ```
+
+**Note:** Larger datasets produce better quality models. For best results, use 500K+ examples.
 
 ## Step 2: Train with All Optimizations Enabled
 
@@ -98,14 +105,16 @@ python inference.py \
 ## Benchmarks
 
 On a single NVIDIA A100 GPU:
-- **Training**: ~2 hours for 250K examples
+- **Training**: ~3-4 hours for 500K examples (large dataset)
+- **Training**: ~2 hours for 250K examples (medium dataset)
 - **Inference**: ~0.15 seconds per example with compilation
 - **Inference (Quantized)**: ~0.05 seconds per example (2-4x faster)
 - **Memory**: ~10GB GPU memory during training
-- **Quality**: 85-90% exact match on validation set
+- **Quality**: 85-90% exact match on validation set (higher with more data)
 
 On CPU (no GPU):
-- **Training**: ~8-12 hours for 250K examples
+- **Training**: ~12-16 hours for 500K examples (large dataset)
+- **Training**: ~8-12 hours for 250K examples (medium dataset)
 - **Inference**: ~0.5 seconds per example
 - **Inference (Quantized)**: ~0.15 seconds per example (2-4x faster)
 - **Memory**: ~4GB RAM

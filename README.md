@@ -15,6 +15,7 @@ This repository is **optimized for best quality AI in least time** with:
 - 🔄 **Dynamic Padding**: Reduces computation on padding tokens
 - ⚙️ **Multi-Worker Data Loading**: Faster data pipeline with prefetching
 - 🎯 **Optimized Hyperparameters**: Carefully tuned for T5-small
+- 📚 **Large Dataset Support**: 500K+ examples for maximum quality
 
 ### Inference Optimizations:
 - 🔥 **Torch Compile Support**: PyTorch 2.0+ compilation for faster inference
@@ -117,7 +118,10 @@ This generates a comprehensive dataset (~1GB, 500K+ examples) with **validated L
 The large data generator now supports command-line arguments for full control:
 
 ```bash
-# Generate 500MB dataset (~250K examples) - ideal for training
+# Generate 1GB dataset (~500K examples) - RECOMMENDED for best quality
+python data/generate_data_large.py --target-examples 500000
+
+# Generate 500MB dataset (~250K examples) - good for training
 python data/generate_data_large.py --target-examples 250000
 
 # Generate custom-sized dataset with validation

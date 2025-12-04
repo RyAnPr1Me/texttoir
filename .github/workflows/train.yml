@@ -16,9 +16,9 @@ on:
         required: false
         default: '8'
       dataset_size:
-        description: 'Number of examples to generate (default: 250000 for ~500MB)'
+        description: 'Number of examples to generate (default: 500000 for ~1GB, large dataset for best quality)'
         required: false
-        default: '250000'
+        default: '500000'
 
 permissions:
   contents: read

@@ -59,17 +59,22 @@ inference:
 
 # Data Generation Configuration
 data:
-  target_examples: 250000  # 250K examples (~500MB)
+  target_examples: 500000  # 500K examples (~1GB) - Large dataset for best quality
   variations_per_example: 15
   train_split: 0.8
   val_split: 0.1
   test_split: 0.1
   seed: 42
   validate_llvm: true  # Validate LLVM IR with llvm-as
+  
+  # For faster testing, use smaller sizes:
+  # - Quick test: 1000 examples (~2MB)
+  # - Development: 50000 examples (~100MB)
+  # - Production: 500000+ examples (~1GB+)
 
 # Performance Expectations
 # With these settings on a single GPU:
-# - Training time: ~2-3 hours for 250K examples
+# - Training time: ~3-4 hours for 500K examples
 # - Memory usage: ~8-12GB GPU memory
 # - Inference speed: ~0.1-0.2 seconds per example with compilation
 # - Quality: High accuracy on standard LLVM IR patterns
