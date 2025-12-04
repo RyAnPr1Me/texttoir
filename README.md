@@ -62,7 +62,21 @@ This creates a small `dataset/` directory (~100KB) with train, validation, and t
 python data/generate_data_large.py
 ```
 
-This generates a comprehensive dataset (~1GB, 500K+ examples) with:
+This generates a comprehensive dataset (~1GB, 500K+ examples) with **validated LLVM IR** and includes:
+
+**Advanced Programming Concepts:**
+- **Memory operations**: Stack allocation (alloca), heap operations
+- **Vector operations (SIMD)**: Vector arithmetic, shuffles, extract/insert elements
+- **Atomic operations**: Atomic load/store, compare-and-swap (CAS), atomic RMW operations
+- **Complex control flow**: Switch statements with multiple cases
+- **Advanced phi nodes**: Complex merge points with multiple predecessors
+- **Type conversions**: All cast operations (trunc, zext, sext, fptosi, sitofp, fpext, fptrunc, ptrtoint, inttoptr, bitcast)
+- **LLVM intrinsics**: memcpy, memset, sqrt, abs, min/max, ctpop, ctlz, bswap
+- **Variable arguments**: va_start, va_end, va_arg
+- **Function attributes**: readnone, readonly, nounwind, alwaysinline
+- **Tail call optimization**: Tail recursive functions
+- **Aggregate operations**: insertvalue, extractvalue for structs
+- **Global variables**: Global constants and mutable variables
 - **Extreme diversity**: All integer types (i8-i128), float types, and operation combinations
 - **Edge cases**: Overflow detection, null checks, boundary conditions
 - **Good code examples**: Properly validated, safe operations
@@ -74,17 +88,24 @@ This generates a comprehensive dataset (~1GB, 500K+ examples) with:
   - Undefined behavior (e.g., shift by >= bit width)
   - Integer overflow without checks
 - **Quality markers**: Each example tagged as "GOOD" or "BAD" in the dataset
+- **LLVM IR Validation**: All generated IR is validated using `llvm-as` to ensure correctness
 
 **Customization Options:**
 
 The large data generator now supports command-line arguments for full control:
 
 ```bash
-# Generate custom-sized dataset
+# Generate 500MB dataset (~250K examples) - ideal for training
+python data/generate_data_large.py --target-examples 250000
+
+# Generate custom-sized dataset with validation
 python data/generate_data_large.py --target-examples 100000 --output-dir my_dataset
 
 # Quick test with 1000 examples
 python data/generate_data_large.py --quick-test
+
+# Generate without validation (faster, but may include invalid IR)
+python data/generate_data_large.py --no-validate --target-examples 50000
 
 # Customize splits and variations
 python data/generate_data_large.py \
@@ -103,6 +124,7 @@ python data/generate_data_large.py \
 - `--val-split F`: Validation data proportion (default: 0.1)
 - `--seed N`: Random seed for reproducibility (default: 42)
 - `--quick-test`: Generate 1000 examples for quick testing
+- `--no-validate`: Skip LLVM IR validation (faster but may include invalid IR)
 
 The large dataset covers:
 - Arithmetic (all ops × all int/float types)
@@ -180,6 +202,20 @@ The large-scale data generator creates **500K+ extremely diverse examples** (~1G
 - **Functions**: composition, recursion (GCD, Fibonacci)
 - **Structs**: field access, pointer arithmetic
 - **Select**: conditional select operations
+
+**Advanced Concepts (NEW):**
+- **Memory operations**: Stack allocation with alloca, array allocation
+- **Vector operations (SIMD)**: Vector add/mul, extract/insert elements, shufflevector
+- **Atomic operations**: atomic load/store, cmpxchg (CAS), atomicrmw (add, xchg, etc.)
+- **Switch statements**: Multi-case branching with default handling
+- **Advanced phi nodes**: Complex control flow merge points
+- **Type conversions**: Complete cast suite (trunc, zext, sext, fptosi, sitofp, fpext, fptrunc, ptrtoint, inttoptr, bitcast)
+- **LLVM intrinsics**: memcpy, memset, sqrt, abs, smin/smax, ctpop, ctlz, bswap
+- **Variable arguments**: Functions with varargs using va_start/va_end
+- **Function attributes**: readnone, readonly, nounwind, alwaysinline
+- **Tail call optimization**: Tail recursive patterns
+- **Aggregate operations**: insertvalue, extractvalue for struct manipulation
+- **Global variables**: Global constants and mutable state
 
 **Quality Markers:**
 - **GOOD examples**: Properly validated, safe code with edge case handling
