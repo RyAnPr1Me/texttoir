@@ -43,7 +43,7 @@ jobs:
       
       - name: Generate training data
         run: |
-          python data/generate_data.py
+          python data/generate_data_large.py
       
       - name: Upload dataset
         uses: actions/upload-artifact@v4
