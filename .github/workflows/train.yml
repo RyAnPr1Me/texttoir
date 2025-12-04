@@ -15,6 +15,10 @@ on:
         description: 'Batch size'
         required: false
         default: '8'
+      dataset_size:
+        description: 'Number of examples to generate (default: 250000 for ~500MB)'
+        required: false
+        default: '250000'
 
 permissions:
   contents: read
@@ -31,19 +35,37 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.9'
+          python-version: '3.10'
       
-      - name: Install dependencies
+      - name: Install LLVM tools for IR validation
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y llvm
+          llvm-as --version
+      
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install uv
-          uv venv 
-          source .venv/bin/activate
-          uv pip install -r requirements.txt
+          pip install tqdm
       
-      - name: Generate training data
+      - name: Generate training data with validation
         run: |
-          python data/generate_data_large.py
+          python data/generate_data_large.py \
+            --target-examples ${{ github.event.inputs.dataset_size || '250000' }} \
+            --output-dir dataset \
+            --variations-per-example 15 \
+            --seed 42
+      
+      - name: Verify dataset size
+        run: |
+          echo "Dataset files:"
+          ls -lh dataset/
+          echo ""
+          echo "Total dataset size:"
+          du -sh dataset/
+          echo ""
+          echo "Number of examples per split:"
+          wc -l dataset/*.jsonl
       
       - name: Upload dataset
         uses: actions/upload-artifact@v4
@@ -64,7 +86,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.9'
+          python-version: '3.10'
       
       - name: Install dependencies
         run: |
@@ -76,6 +98,12 @@ jobs:
         with:
           name: dataset
           path: dataset/
+      
+      - name: Verify dataset
+        run: |
+          echo "Downloaded dataset:"
+          ls -lh dataset/
+          wc -l dataset/*.jsonl
       
       - name: Train model
         run: |
