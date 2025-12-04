@@ -1,12 +1,11 @@
 """
-Data generation script for text-to-LLVM IR training pairs.
-Generates diverse, high-quality examples covering various programming constructs.
+Quick data generation script for text-to-LLVM IR training pairs.
+Generates small dataset for testing. Use generate_data_large.py for full 1GB dataset.
 """
 
 import json
 import random
 import os
-from pathlib import Path
 from typing import List, Tuple
 
 
@@ -371,8 +370,11 @@ def save_dataset(examples: List[Tuple[str, str]], output_dir: str, split: str):
 
 
 def main():
-    """Generate and save training data."""
-    print("Generating text-to-LLVM IR training data...")
+    """Generate and save training data (small test dataset)."""
+    print("=" * 60)
+    print("Quick Text-to-LLVM IR Dataset Generation")
+    print("NOTE: For 1GB production dataset, use generate_data_large.py")
+    print("=" * 60)
     
     # Generate base examples
     generator = LLVMIRGenerator()
@@ -401,11 +403,15 @@ def main():
     save_dataset(val_data, output_dir, "val")
     save_dataset(test_data, output_dir, "test")
     
-    print("\nDataset generation complete!")
+    print("\n" + "=" * 60)
+    print("Dataset generation complete!")
     print(f"Train: {len(train_data)} examples")
     print(f"Val: {len(val_data)} examples")
     print(f"Test: {len(test_data)} examples")
+    print("=" * 60)
 
 
 if __name__ == "__main__":
+    print("\n💡 TIP: For full 1GB dataset with extreme diversity,")
+    print("         use: python data/generate_data_large.py\n")
     main()

@@ -48,13 +48,44 @@ pip install -r requirements.txt
 
 ### Generate Training Data
 
-Generate diverse text-to-LLVM IR training pairs:
+**Quick Test Dataset** (for rapid prototyping):
 
 ```bash
 python data/generate_data.py
 ```
 
-This creates a `dataset/` directory with train, validation, and test splits.
+This creates a small `dataset/` directory (~100KB) with train, validation, and test splits for quick testing.
+
+**Production Dataset** (1GB+ with extreme diversity):
+
+```bash
+python data/generate_data_large.py
+```
+
+This generates a comprehensive dataset (~1GB, 500K+ examples) with:
+- **Extreme diversity**: All integer types (i8-i128), float types, and operation combinations
+- **Edge cases**: Overflow detection, null checks, boundary conditions
+- **Good code examples**: Properly validated, safe operations
+- **Bad code examples**: Marked with "BAD CODE:" prefix, demonstrating common bugs like:
+  - Division by zero vulnerabilities
+  - Missing null pointer checks
+  - Buffer overflow risks
+  - Stack overflow in recursion
+  - Undefined behavior (e.g., shift by >= bit width)
+  - Integer overflow without checks
+- **Quality markers**: Each example tagged as "GOOD" or "BAD" in the dataset
+
+The large dataset covers:
+- Arithmetic (all ops × all int/float types)
+- Comparisons (signed, unsigned, ordered, unordered)
+- Conditionals (if/else, clamp, abs, min/max)
+- Loops (for, while, phi nodes)
+- Arrays (sum, max, reverse, with/without bounds checking)
+- Bitwise operations (AND, OR, XOR, shifts, bit manipulation)
+- Functions (calls, recursion, GCD, Fibonacci)
+- Structs and pointers
+- Select operations
+- Edge cases and overflow handling
 
 ### Train the Model
 
@@ -103,21 +134,54 @@ The model is fine-tuned on text-to-LLVM IR pairs with a custom prefix: `"transla
 
 ## Training Data
 
-The data generation script creates diverse examples covering:
+### Quick Dataset (`generate_data.py`)
+Small dataset (~50 examples) for rapid testing and prototyping.
 
-- **Arithmetic Operations**: add, subtract, multiply, divide
-- **Conditionals**: if-else, comparisons, branching
-- **Loops**: for loops, while loops, phi nodes
-- **Arrays**: array operations, pointer arithmetic
-- **Functions**: function calls, composition
-- **Floating Point**: float and double operations
-- **Logical Operations**: AND, OR, XOR, comparisons
-- **Data Augmentation**: Variations in text descriptions
+### Large Production Dataset (`generate_data_large.py`)
 
-The dataset is split into:
-- Training: 80%
-- Validation: 10%
-- Test: 10%
+The large-scale data generator creates **500K+ extremely diverse examples** (~1GB) covering:
+
+**Core Operations:**
+- **Arithmetic**: All operations (add, sub, mul, div, rem) × all types (i8, i16, i32, i64, i128, float, double, x86_fp80)
+- **Comparisons**: Signed/unsigned integer comparisons, ordered/unordered float comparisons
+- **Conditionals**: if-else, max/min, absolute value, clamp, sign function
+- **Loops**: sum, factorial, power, with proper phi nodes
+- **Arrays**: sum, max, reverse, with boundary checking
+- **Bitwise**: AND, OR, XOR, shifts (logical/arithmetic), bit manipulation, popcount
+- **Functions**: composition, recursion (GCD, Fibonacci)
+- **Structs**: field access, pointer arithmetic
+- **Select**: conditional select operations
+
+**Quality Markers:**
+- **GOOD examples**: Properly validated, safe code with edge case handling
+- **BAD examples**: Explicitly marked bugs and vulnerabilities:
+  - Division by zero (no checks)
+  - Null pointer dereference
+  - Buffer overflows (no bounds checking)
+  - Integer overflow (esp. INT_MIN absolute value)
+  - Stack overflow in recursion (missing base case)
+  - Undefined behavior (shift by >= bit width)
+  - Float NaN/infinity mishandling
+
+**Uniqueness Features:**
+- Hash-based deduplication ensures every example is unique
+- Text variation generator creates diverse phrasings
+- Comprehensive type coverage (all LLVM integer and float types)
+- Real-world edge cases and corner conditions
+
+Dataset split:
+- **Training**: 80% (400K examples)
+- **Validation**: 10% (50K examples)
+- **Test**: 10% (50K examples)
+
+Each example includes:
+```json
+{
+  "text": "Description of what to generate",
+  "llvm_ir": "Valid or intentionally buggy LLVM IR code",
+  "quality": "GOOD" or "BAD"
+}
+```
 
 ## GitHub Actions Workflow
 

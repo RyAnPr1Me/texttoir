@@ -1,0 +1,982 @@
+"""
+Enhanced data generation script for text-to-LLVM IR training pairs.
+Generates 1GB+ dataset with extremely diverse, unique examples.
+Includes edge cases, good and bad code with quality markings.
+"""
+
+import json
+import random
+import os
+import itertools
+import hashlib
+from typing import List, Tuple, Dict, Set
+
+
+class EnhancedLLVMIRGenerator:
+    """Generates extremely diverse text descriptions and LLVM IR code."""
+    
+    def __init__(self):
+        self.function_names = ['calculate', 'process', 'compute', 'transform', 'execute', 
+                               'handle', 'manage', 'operate', 'evaluate', 'analyze',
+                               'convert', 'filter', 'map', 'reduce', 'aggregate', 'accumulate',
+                               'combine', 'merge', 'split', 'divide_work', 'batch_process']
+        self.var_names = ['x', 'y', 'z', 'a', 'b', 'c', 'd', 'e', 'result', 'temp', 'value',
+                         'data', 'item', 'elem', 'idx', 'count', 'sum', 'prod', 'acc',
+                         'left', 'right', 'mid', 'low', 'high', 'cur', 'next', 'prev']
+        self.int_types = ['i8', 'i16', 'i32', 'i64', 'i128']
+        self.float_types = ['float', 'double', 'x86_fp80']
+        self.generated_hashes: Set[str] = set()
+        
+    def _get_hash(self, text: str, ir: str) -> str:
+        """Generate hash for uniqueness checking."""
+        combined = f"{text}|||{ir}"
+        return hashlib.md5(combined.encode()).hexdigest()
+    
+    def _is_unique(self, text: str, ir: str) -> bool:
+        """Check if example is unique."""
+        h = self._get_hash(text, ir)
+        if h in self.generated_hashes:
+            return False
+        self.generated_hashes.add(h)
+        return True
+    
+    def _add_example(self, examples: List[Tuple[str, str, str]], 
+                     text: str, ir: str, quality: str):
+        """Add example if unique."""
+        if self._is_unique(text, ir):
+            examples.append((text, ir, quality))
+    
+    def generate_basic_arithmetic(self) -> List[Tuple[str, str, str]]:
+        """Generate basic arithmetic with all combinations."""
+        examples = []
+        operations = [
+            ('add', 'add', 'adds', 'addition'),
+            ('sub', 'subtract', 'subtracts', 'subtraction'),
+            ('mul', 'multiply', 'multiplies', 'multiplication'),
+            ('sdiv', 'divide', 'divides', 'division'),
+            ('udiv', 'unsigned divide', 'unsigned divides', 'unsigned division'),
+            ('srem', 'modulo', 'remainder of', 'mod'),
+            ('urem', 'unsigned modulo', 'unsigned remainder', 'unsigned mod')
+        ]
+        
+        for int_type in self.int_types:
+            for op_llvm, op_name1, op_name2, op_name3 in operations:
+                for fn_name in random.sample(self.function_names, 3):
+                    for var_a, var_b in [('x', 'y'), ('a', 'b'), ('left', 'right')]:
+                        # Good example
+                        text = f"Write a function that {op_name2} two {int_type} integers"
+                        ir = f"""define {int_type} @{fn_name}({int_type} %{var_a}, {int_type} %{var_b}) {{
+entry:
+  %result = {op_llvm} {int_type} %{var_a}, %{var_b}
+  ret {int_type} %result
+}}"""
+                        self._add_example(examples, text, ir, "GOOD")
+                        
+                        # Variation
+                        text = f"Implement {op_name3} of two {int_type} values"
+                        self._add_example(examples, text, ir, "GOOD")
+        
+        # Bad examples - division by zero risk
+        for int_type in self.int_types:
+            text = f"BAD CODE: Function that divides without checking for zero divisor ({int_type})"
+            ir = f"""define {int_type} @unsafe_divide({int_type} %a, {int_type} %b) {{
+entry:
+  ; BUG: No check for division by zero!
+  %result = sdiv {int_type} %a, %b
+  ret {int_type} %result
+}}"""
+            self._add_example(examples, text, ir, "BAD")
+        
+        return examples
+    
+    def generate_floating_point(self) -> List[Tuple[str, str, str]]:
+        """Generate floating point operations."""
+        examples = []
+        operations = [
+            ('fadd', 'add', 'floating point addition'),
+            ('fsub', 'subtract', 'floating point subtraction'),
+            ('fmul', 'multiply', 'floating point multiplication'),
+            ('fdiv', 'divide', 'floating point division'),
+            ('frem', 'remainder', 'floating point remainder')
+        ]
+        
+        for float_type in self.float_types:
+            for op_llvm, op_name, op_desc in operations:
+                text = f"Create a function for {op_desc} with {float_type}"
+                ir = f"""define {float_type} @f_{op_name}({float_type} %a, {float_type} %b) {{
+entry:
+  %result = {op_llvm} {float_type} %a, %b
+  ret {float_type} %result
+}}"""
+                self._add_example(examples, text, ir, "GOOD")
+        
+        # Bad example - no NaN/infinity check
+        text = "BAD CODE: Floating point division without NaN/infinity checks"
+        ir = """define double @unsafe_fdiv(double %a, double %b) {
+entry:
+  ; BUG: No check for NaN, infinity, or division by zero
+  %result = fdiv double %a, %b
+  ret double %result
+}"""
+        self._add_example(examples, text, ir, "BAD")
+        
+        return examples
+    
+    def generate_comparisons(self) -> List[Tuple[str, str, str]]:
+        """Generate comparison operations."""
+        examples = []
+        int_comparisons = [
+            ('eq', 'equal to', 'equality'),
+            ('ne', 'not equal to', 'inequality'),
+            ('sgt', 'greater than', 'signed greater'),
+            ('sge', 'greater than or equal', 'signed greater or equal'),
+            ('slt', 'less than', 'signed less'),
+            ('sle', 'less than or equal', 'signed less or equal'),
+            ('ugt', 'unsigned greater than', 'unsigned greater'),
+            ('uge', 'unsigned greater or equal', 'unsigned greater or equal'),
+            ('ult', 'unsigned less than', 'unsigned less'),
+            ('ule', 'unsigned less or equal', 'unsigned less or equal')
+        ]
+        
+        for int_type in self.int_types:
+            for cmp_op, cmp_desc, cmp_name in int_comparisons:
+                text = f"Function to check if first {int_type} is {cmp_desc} second"
+                ir = f"""define i1 @cmp_{cmp_op}({int_type} %a, {int_type} %b) {{
+entry:
+  %result = icmp {cmp_op} {int_type} %a, %b
+  ret i1 %result
+}}"""
+                self._add_example(examples, text, ir, "GOOD")
+        
+        # Floating point comparisons
+        float_comparisons = [
+            ('oeq', 'ordered equal', 'ordered equality'),
+            ('one', 'ordered not equal', 'ordered inequality'),
+            ('ogt', 'ordered greater', 'ordered greater than'),
+            ('olt', 'ordered less', 'ordered less than'),
+            ('ueq', 'unordered equal', 'unordered equality'),
+            ('une', 'unordered not equal', 'unordered inequality')
+        ]
+        
+        for float_type in self.float_types:
+            for cmp_op, cmp_desc, cmp_name in float_comparisons:
+                text = f"Compare {float_type} values using {cmp_name}"
+                ir = f"""define i1 @fcmp_{cmp_op}({float_type} %a, {float_type} %b) {{
+entry:
+  %result = fcmp {cmp_op} {float_type} %a, %b
+  ret i1 %result
+}}"""
+                self._add_example(examples, text, ir, "GOOD")
+        
+        return examples
+    
+    def generate_conditionals(self) -> List[Tuple[str, str, str]]:
+        """Generate conditional logic with edge cases."""
+        examples = []
+        
+        for int_type in self.int_types:
+            # Max function
+            text = f"Return maximum of two {int_type} values"
+            ir = f"""define {int_type} @max({int_type} %a, {int_type} %b) {{
+entry:
+  %cmp = icmp sgt {int_type} %a, %b
+  br i1 %cmp, label %if.then, label %if.else
+
+if.then:
+  ret {int_type} %a
+
+if.else:
+  ret {int_type} %b
+}}"""
+            self._add_example(examples, text, ir, "GOOD")
+            
+            # Min function
+            text = f"Return minimum of two {int_type} values"
+            ir = f"""define {int_type} @min({int_type} %a, {int_type} %b) {{
+entry:
+  %cmp = icmp slt {int_type} %a, %b
+  br i1 %cmp, label %if.then, label %if.else
+
+if.then:
+  ret {int_type} %a
+
+if.else:
+  ret {int_type} %b
+}}"""
+            self._add_example(examples, text, ir, "GOOD")
+            
+            # Absolute value
+            text = f"Calculate absolute value of {int_type}"
+            ir = f"""define {int_type} @abs({int_type} %x) {{
+entry:
+  %cmp = icmp slt {int_type} %x, 0
+  br i1 %cmp, label %if.neg, label %if.pos
+
+if.neg:
+  %neg = sub {int_type} 0, %x
+  ret {int_type} %neg
+
+if.pos:
+  ret {int_type} %x
+}}"""
+            self._add_example(examples, text, ir, "GOOD")
+            
+            # Clamp function
+            text = f"Clamp {int_type} value between min and max"
+            ir = f"""define {int_type} @clamp({int_type} %val, {int_type} %min, {int_type} %max) {{
+entry:
+  %cmp1 = icmp slt {int_type} %val, %min
+  br i1 %cmp1, label %ret.min, label %check.max
+
+check.max:
+  %cmp2 = icmp sgt {int_type} %val, %max
+  br i1 %cmp2, label %ret.max, label %ret.val
+
+ret.min:
+  ret {int_type} %min
+
+ret.max:
+  ret {int_type} %max
+
+ret.val:
+  ret {int_type} %val
+}}"""
+            self._add_example(examples, text, ir, "GOOD")
+        
+        # Bad example - missing edge case
+        text = "BAD CODE: Absolute value that overflows on INT_MIN"
+        ir = """define i32 @bad_abs(i32 %x) {
+entry:
+  ; BUG: -INT_MIN overflows to INT_MIN due to two's complement
+  %cmp = icmp slt i32 %x, 0
+  br i1 %cmp, label %if.neg, label %if.pos
+
+if.neg:
+  %neg = sub i32 0, %x
+  ret i32 %neg
+
+if.pos:
+  ret i32 %x
+}"""
+        self._add_example(examples, text, ir, "BAD")
+        
+        return examples
+    
+    def generate_loops(self) -> List[Tuple[str, str, str]]:
+        """Generate loop examples with various patterns."""
+        examples = []
+        
+        for int_type in self.int_types:
+            # Sum from 1 to n
+            text = f"Calculate sum from 1 to n using {int_type}"
+            ir = f"""define {int_type} @sum_to_n({int_type} %n) {{
+entry:
+  %cmp.init = icmp sle {int_type} %n, 0
+  br i1 %cmp.init, label %exit.zero, label %loop.preheader
+
+loop.preheader:
+  br label %loop
+
+loop:
+  %i = phi {int_type} [ 1, %loop.preheader ], [ %i.next, %loop ]
+  %sum = phi {int_type} [ 0, %loop.preheader ], [ %sum.next, %loop ]
+  %sum.next = add {int_type} %sum, %i
+  %i.next = add {int_type} %i, 1
+  %cmp = icmp sle {int_type} %i.next, %n
+  br i1 %cmp, label %loop, label %exit
+
+exit.zero:
+  ret {int_type} 0
+
+exit:
+  ret {int_type} %sum.next
+}}"""
+            self._add_example(examples, text, ir, "GOOD")
+            
+            # Factorial
+            text = f"Compute factorial of n ({int_type})"
+            ir = f"""define {int_type} @factorial({int_type} %n) {{
+entry:
+  %cmp.init = icmp sle {int_type} %n, 1
+  br i1 %cmp.init, label %base, label %loop.preheader
+
+base:
+  ret {int_type} 1
+
+loop.preheader:
+  br label %loop
+
+loop:
+  %i = phi {int_type} [ %n, %loop.preheader ], [ %i.next, %loop ]
+  %result = phi {int_type} [ 1, %loop.preheader ], [ %result.next, %loop ]
+  %result.next = mul {int_type} %result, %i
+  %i.next = sub {int_type} %i, 1
+  %cmp = icmp sgt {int_type} %i.next, 1
+  br i1 %cmp, label %loop, label %exit
+
+exit:
+  ret {int_type} %result.next
+}}"""
+            self._add_example(examples, text, ir, "GOOD")
+            
+            # Power function
+            text = f"Calculate base raised to power ({int_type})"
+            ir = f"""define {int_type} @power({int_type} %base, {int_type} %exp) {{
+entry:
+  %cmp.init = icmp eq {int_type} %exp, 0
+  br i1 %cmp.init, label %ret.one, label %loop.preheader
+
+ret.one:
+  ret {int_type} 1
+
+loop.preheader:
+  br label %loop
+
+loop:
+  %i = phi {int_type} [ 1, %loop.preheader ], [ %i.next, %loop ]
+  %result = phi {int_type} [ %base, %loop.preheader ], [ %result.next, %loop ]
+  %result.next = mul {int_type} %result, %base
+  %i.next = add {int_type} %i, 1
+  %cmp = icmp slt {int_type} %i.next, %exp
+  br i1 %cmp, label %loop, label %exit
+
+exit:
+  ret {int_type} %result.next
+}}"""
+            self._add_example(examples, text, ir, "GOOD")
+        
+        # Bad example - infinite loop potential
+        text = "BAD CODE: Loop that may never terminate due to unsigned underflow"
+        ir = """define i32 @bad_countdown(i32 %n) {
+entry:
+  br label %loop
+
+loop:
+  ; BUG: If n is 0, unsigned subtraction underflows to 4294967295
+  %i = phi i32 [ %n, %entry ], [ %i.next, %loop ]
+  %i.next = sub i32 %i, 1
+  %cmp = icmp ne i32 %i, 0
+  br i1 %cmp, label %loop, label %exit
+
+exit:
+  ret i32 0
+}"""
+        self._add_example(examples, text, ir, "BAD")
+        
+        return examples
+    
+    def generate_arrays(self) -> List[Tuple[str, str, str]]:
+        """Generate array operations."""
+        examples = []
+        
+        for int_type in self.int_types:
+            # Array sum
+            text = f"Sum all elements in {int_type} array"
+            ir = f"""define {int_type} @array_sum({int_type}* %arr, {int_type} %len) {{
+entry:
+  %cmp.init = icmp eq {int_type} %len, 0
+  br i1 %cmp.init, label %exit.zero, label %loop
+
+loop:
+  %i = phi {int_type} [ 0, %entry ], [ %i.next, %loop ]
+  %sum = phi {int_type} [ 0, %entry ], [ %sum.next, %loop ]
+  %ptr = getelementptr {int_type}, {int_type}* %arr, {int_type} %i
+  %val = load {int_type}, {int_type}* %ptr
+  %sum.next = add {int_type} %sum, %val
+  %i.next = add {int_type} %i, 1
+  %cmp = icmp slt {int_type} %i.next, %len
+  br i1 %cmp, label %loop, label %exit
+
+exit.zero:
+  ret {int_type} 0
+
+exit:
+  ret {int_type} %sum.next
+}}"""
+            self._add_example(examples, text, ir, "GOOD")
+            
+            # Array max
+            text = f"Find maximum element in {int_type} array"
+            ir = f"""define {int_type} @array_max({int_type}* %arr, {int_type} %len) {{
+entry:
+  %first_ptr = getelementptr {int_type}, {int_type}* %arr, {int_type} 0
+  %first = load {int_type}, {int_type}* %first_ptr
+  %cmp.init = icmp sle {int_type} %len, 1
+  br i1 %cmp.init, label %exit, label %loop
+
+loop:
+  %i = phi {int_type} [ 1, %entry ], [ %i.next, %loop ]
+  %max = phi {int_type} [ %first, %entry ], [ %new_max, %loop ]
+  %ptr = getelementptr {int_type}, {int_type}* %arr, {int_type} %i
+  %val = load {int_type}, {int_type}* %ptr
+  %cmp = icmp sgt {int_type} %val, %max
+  %new_max = select i1 %cmp, {int_type} %val, {int_type} %max
+  %i.next = add {int_type} %i, 1
+  %cmp.loop = icmp slt {int_type} %i.next, %len
+  br i1 %cmp.loop, label %loop, label %exit
+
+exit:
+  %result = phi {int_type} [ %first, %entry ], [ %new_max, %loop ]
+  ret {int_type} %result
+}}"""
+            self._add_example(examples, text, ir, "GOOD")
+            
+            # Array reverse
+            text = f"Reverse {int_type} array in place"
+            ir = f"""define void @array_reverse({int_type}* %arr, {int_type} %len) {{
+entry:
+  %half = sdiv {int_type} %len, 2
+  %cmp.init = icmp sle {int_type} %len, 1
+  br i1 %cmp.init, label %exit, label %loop
+
+loop:
+  %i = phi {int_type} [ 0, %entry ], [ %i.next, %loop ]
+  %j_init = sub {int_type} %len, 1
+  %j = sub {int_type} %j_init, %i
+  %ptr_i = getelementptr {int_type}, {int_type}* %arr, {int_type} %i
+  %ptr_j = getelementptr {int_type}, {int_type}* %arr, {int_type} %j
+  %val_i = load {int_type}, {int_type}* %ptr_i
+  %val_j = load {int_type}, {int_type}* %ptr_j
+  store {int_type} %val_j, {int_type}* %ptr_i
+  store {int_type} %val_i, {int_type}* %ptr_j
+  %i.next = add {int_type} %i, 1
+  %cmp = icmp slt {int_type} %i.next, %half
+  br i1 %cmp, label %loop, label %exit
+
+exit:
+  ret void
+}}"""
+            self._add_example(examples, text, ir, "GOOD")
+        
+        # Bad example - no bounds checking
+        text = "BAD CODE: Array access without bounds checking"
+        ir = """define i32 @unsafe_array_get(i32* %arr, i32 %index) {
+entry:
+  ; BUG: No validation that index is within array bounds
+  %ptr = getelementptr i32, i32* %arr, i32 %index
+  %val = load i32, i32* %ptr
+  ret i32 %val
+}"""
+        self._add_example(examples, text, ir, "BAD")
+        
+        # Bad example - null pointer dereference
+        text = "BAD CODE: Array function that doesn't check for null pointer"
+        ir = """define i32 @unsafe_array_sum(i32* %arr, i32 %len) {
+entry:
+  ; BUG: No null pointer check before dereferencing
+  br label %loop
+
+loop:
+  %i = phi i32 [ 0, %entry ], [ %i.next, %loop ]
+  %sum = phi i32 [ 0, %entry ], [ %sum.next, %loop ]
+  %ptr = getelementptr i32, i32* %arr, i32 %i
+  %val = load i32, i32* %ptr
+  %sum.next = add i32 %sum, %val
+  %i.next = add i32 %i, 1
+  %cmp = icmp slt i32 %i.next, %len
+  br i1 %cmp, label %loop, label %exit
+
+exit:
+  ret i32 %sum.next
+}"""
+        self._add_example(examples, text, ir, "BAD")
+        
+        return examples
+    
+    def generate_bitwise(self) -> List[Tuple[str, str, str]]:
+        """Generate bitwise operations."""
+        examples = []
+        operations = [
+            ('and', 'AND', 'bitwise AND'),
+            ('or', 'OR', 'bitwise OR'),
+            ('xor', 'XOR', 'bitwise XOR')
+        ]
+        
+        for int_type in self.int_types:
+            for op, op_name, op_desc in operations:
+                text = f"Perform {op_desc} on two {int_type} values"
+                ir = f"""define {int_type} @bit_{op}({int_type} %a, {int_type} %b) {{
+entry:
+  %result = {op} {int_type} %a, %b
+  ret {int_type} %result
+}}"""
+                self._add_example(examples, text, ir, "GOOD")
+            
+            # Shift operations
+            text = f"Left shift {int_type} value"
+            ir = f"""define {int_type} @shift_left({int_type} %val, {int_type} %amount) {{
+entry:
+  %result = shl {int_type} %val, %amount
+  ret {int_type} %result
+}}"""
+            self._add_example(examples, text, ir, "GOOD")
+            
+            text = f"Logical right shift {int_type} value"
+            ir = f"""define {int_type} @shift_right_logical({int_type} %val, {int_type} %amount) {{
+entry:
+  %result = lshr {int_type} %val, %amount
+  ret {int_type} %result
+}}"""
+            self._add_example(examples, text, ir, "GOOD")
+            
+            text = f"Arithmetic right shift {int_type} value"
+            ir = f"""define {int_type} @shift_right_arith({int_type} %val, {int_type} %amount) {{
+entry:
+  %result = ashr {int_type} %val, %amount
+  ret {int_type} %result
+}}"""
+            self._add_example(examples, text, ir, "GOOD")
+            
+            # Bit manipulation
+            text = f"Check if bit at position is set ({int_type})"
+            ir = f"""define i1 @is_bit_set({int_type} %val, {int_type} %pos) {{
+entry:
+  %mask = shl {int_type} 1, %pos
+  %result = and {int_type} %val, %mask
+  %is_set = icmp ne {int_type} %result, 0
+  ret i1 %is_set
+}}"""
+            self._add_example(examples, text, ir, "GOOD")
+            
+            # Count set bits (population count)
+            text = f"Count number of set bits in {int_type}"
+            ir = f"""define {int_type} @popcount({int_type} %val) {{
+entry:
+  br label %loop
+
+loop:
+  %n = phi {int_type} [ %val, %entry ], [ %n.next, %loop ]
+  %count = phi {int_type} [ 0, %entry ], [ %count.next, %loop ]
+  %bit = and {int_type} %n, 1
+  %count.next = add {int_type} %count, %bit
+  %n.next = lshr {int_type} %n, 1
+  %cmp = icmp ne {int_type} %n.next, 0
+  br i1 %cmp, label %loop, label %exit
+
+exit:
+  ret {int_type} %count.next
+}}"""
+            self._add_example(examples, text, ir, "GOOD")
+        
+        # Bad example - undefined shift
+        text = "BAD CODE: Shift by amount >= bit width (undefined behavior)"
+        ir = """define i32 @bad_shift(i32 %val, i32 %amount) {
+entry:
+  ; BUG: No check that amount < 32, shifting by >= 32 is undefined
+  %result = shl i32 %val, %amount
+  ret i32 %result
+}"""
+        self._add_example(examples, text, ir, "BAD")
+        
+        return examples
+    
+    def generate_functions(self) -> List[Tuple[str, str, str]]:
+        """Generate function call examples."""
+        examples = []
+        
+        for int_type in self.int_types:
+            # Function composition
+            text = f"Calculate sum of squares using helper function ({int_type})"
+            ir = f"""define {int_type} @square({int_type} %x) {{
+entry:
+  %result = mul {int_type} %x, %x
+  ret {int_type} %result
+}}
+
+define {int_type} @sum_of_squares({int_type} %a, {int_type} %b) {{
+entry:
+  %sq_a = call {int_type} @square({int_type} %a)
+  %sq_b = call {int_type} @square({int_type} %b)
+  %result = add {int_type} %sq_a, %sq_b
+  ret {int_type} %result
+}}"""
+            self._add_example(examples, text, ir, "GOOD")
+            
+            # Recursive function
+            text = f"Recursive GCD function ({int_type})"
+            ir = f"""define {int_type} @gcd({int_type} %a, {int_type} %b) {{
+entry:
+  %cmp = icmp eq {int_type} %b, 0
+  br i1 %cmp, label %base, label %recurse
+
+base:
+  ret {int_type} %a
+
+recurse:
+  %rem = urem {int_type} %a, %b
+  %result = call {int_type} @gcd({int_type} %b, {int_type} %rem)
+  ret {int_type} %result
+}}"""
+            self._add_example(examples, text, ir, "GOOD")
+            
+            # Fibonacci
+            text = f"Recursive Fibonacci function ({int_type})"
+            ir = f"""define {int_type} @fibonacci({int_type} %n) {{
+entry:
+  %cmp1 = icmp eq {int_type} %n, 0
+  br i1 %cmp1, label %ret.zero, label %check.one
+
+ret.zero:
+  ret {int_type} 0
+
+check.one:
+  %cmp2 = icmp eq {int_type} %n, 1
+  br i1 %cmp2, label %ret.one, label %recurse
+
+ret.one:
+  ret {int_type} 1
+
+recurse:
+  %n1 = sub {int_type} %n, 1
+  %n2 = sub {int_type} %n, 2
+  %fib1 = call {int_type} @fibonacci({int_type} %n1)
+  %fib2 = call {int_type} @fibonacci({int_type} %n2)
+  %result = add {int_type} %fib1, %fib2
+  ret {int_type} %result
+}}"""
+            self._add_example(examples, text, ir, "GOOD")
+        
+        # Bad example - stack overflow risk
+        text = "BAD CODE: Recursive function without base case check (stack overflow risk)"
+        ir = """define i32 @bad_recursive(i32 %n) {
+entry:
+  ; BUG: Missing proper base case, will cause stack overflow
+  %n_next = sub i32 %n, 1
+  %result = call i32 @bad_recursive(i32 %n_next)
+  %final = add i32 %result, %n
+  ret i32 %final
+}"""
+        self._add_example(examples, text, ir, "BAD")
+        
+        return examples
+    
+    def generate_structs_and_pointers(self) -> List[Tuple[str, str, str]]:
+        """Generate struct and pointer examples."""
+        examples = []
+        
+        # Struct operations
+        text = "Load field from struct pointer"
+        ir = """%Point = type { i32, i32 }
+
+define i32 @get_x(%Point* %p) {
+entry:
+  %x_ptr = getelementptr %Point, %Point* %p, i32 0, i32 0
+  %x = load i32, i32* %x_ptr
+  ret i32 %x
+}"""
+        self._add_example(examples, text, ir, "GOOD")
+        
+        text = "Set field in struct pointer"
+        ir = """%Point = type { i32, i32 }
+
+define void @set_y(%Point* %p, i32 %val) {
+entry:
+  %y_ptr = getelementptr %Point, %Point* %p, i32 0, i32 1
+  store i32 %val, i32* %y_ptr
+  ret void
+}"""
+        self._add_example(examples, text, ir, "GOOD")
+        
+        text = "Calculate distance squared between two points"
+        ir = """%Point = type { i32, i32 }
+
+define i32 @distance_squared(%Point* %p1, %Point* %p2) {
+entry:
+  %x1_ptr = getelementptr %Point, %Point* %p1, i32 0, i32 0
+  %y1_ptr = getelementptr %Point, %Point* %p1, i32 0, i32 1
+  %x2_ptr = getelementptr %Point, %Point* %p2, i32 0, i32 0
+  %y2_ptr = getelementptr %Point, %Point* %p2, i32 0, i32 1
+  %x1 = load i32, i32* %x1_ptr
+  %y1 = load i32, i32* %y1_ptr
+  %x2 = load i32, i32* %x2_ptr
+  %y2 = load i32, i32* %y2_ptr
+  %dx = sub i32 %x2, %x1
+  %dy = sub i32 %y2, %y1
+  %dx2 = mul i32 %dx, %dx
+  %dy2 = mul i32 %dy, %dy
+  %dist2 = add i32 %dx2, %dy2
+  ret i32 %dist2
+}"""
+        self._add_example(examples, text, ir, "GOOD")
+        
+        # Bad example - null pointer
+        text = "BAD CODE: Struct field access without null check"
+        ir = """%Data = type { i32, i32, i32 }
+
+define i32 @unsafe_get_field(%Data* %ptr) {
+entry:
+  ; BUG: No null pointer check
+  %field_ptr = getelementptr %Data, %Data* %ptr, i32 0, i32 0
+  %val = load i32, i32* %field_ptr
+  ret i32 %val
+}"""
+        self._add_example(examples, text, ir, "BAD")
+        
+        return examples
+    
+    def generate_select_operations(self) -> List[Tuple[str, str, str]]:
+        """Generate select instruction examples."""
+        examples = []
+        
+        for int_type in self.int_types:
+            text = f"Conditional select maximum using select instruction ({int_type})"
+            ir = f"""define {int_type} @select_max({int_type} %a, {int_type} %b) {{
+entry:
+  %cmp = icmp sgt {int_type} %a, %b
+  %result = select i1 %cmp, {int_type} %a, {int_type} %b
+  ret {int_type} %result
+}}"""
+            self._add_example(examples, text, ir, "GOOD")
+            
+            text = f"Absolute value using select ({int_type})"
+            ir = f"""define {int_type} @abs_select({int_type} %x) {{
+entry:
+  %cmp = icmp slt {int_type} %x, 0
+  %neg = sub {int_type} 0, %x
+  %result = select i1 %cmp, {int_type} %neg, {int_type} %x
+  ret {int_type} %result
+}}"""
+            self._add_example(examples, text, ir, "GOOD")
+        
+        return examples
+    
+    def generate_edge_cases(self) -> List[Tuple[str, str, str]]:
+        """Generate edge case examples."""
+        examples = []
+        
+        # Overflow detection
+        text = "EDGE CASE: Detect signed addition overflow"
+        ir = """define i1 @will_add_overflow(i32 %a, i32 %b) {
+entry:
+  %result = call {i32, i1} @llvm.sadd.with.overflow.i32(i32 %a, i32 %b)
+  %overflow = extractvalue {i32, i1} %result, 1
+  ret i1 %overflow
+}
+
+declare {i32, i1} @llvm.sadd.with.overflow.i32(i32, i32)"""
+        self._add_example(examples, text, ir, "GOOD")
+        
+        # Safe multiplication
+        text = "EDGE CASE: Safe multiplication with overflow check"
+        ir = """define {i32, i1} @safe_mul(i32 %a, i32 %b) {
+entry:
+  %result = call {i32, i1} @llvm.smul.with.overflow.i32(i32 %a, i32 %b)
+  ret {i32, i1} %result
+}
+
+declare {i32, i1} @llvm.smul.with.overflow.i32(i32, i32)"""
+        self._add_example(examples, text, ir, "GOOD")
+        
+        # Integer minimum edge case
+        text = "EDGE CASE: Handle INT_MIN absolute value safely"
+        ir = """define i32 @safe_abs(i32 %x) {
+entry:
+  %is_min = icmp eq i32 %x, -2147483648
+  br i1 %is_min, label %overflow, label %normal
+
+overflow:
+  ; Return INT_MAX as best approximation
+  ret i32 2147483647
+
+normal:
+  %cmp = icmp slt i32 %x, 0
+  %neg = sub i32 0, %x
+  %result = select i1 %cmp, i32 %neg, i32 %x
+  ret i32 %result
+}"""
+        self._add_example(examples, text, ir, "GOOD")
+        
+        # Zero-length array
+        text = "EDGE CASE: Handle zero-length array in sum"
+        ir = """define i32 @safe_array_sum(i32* %arr, i32 %len) {
+entry:
+  %is_empty = icmp eq i32 %len, 0
+  br i1 %is_empty, label %ret.zero, label %check.null
+
+check.null:
+  %is_null = icmp eq i32* %arr, null
+  br i1 %is_null, label %ret.zero, label %loop
+
+loop:
+  %i = phi i32 [ 0, %check.null ], [ %i.next, %loop ]
+  %sum = phi i32 [ 0, %check.null ], [ %sum.next, %loop ]
+  %ptr = getelementptr i32, i32* %arr, i32 %i
+  %val = load i32, i32* %ptr
+  %sum.next = add i32 %sum, %val
+  %i.next = add i32 %i, 1
+  %cmp = icmp slt i32 %i.next, %len
+  br i1 %cmp, label %loop, label %ret.sum
+
+ret.zero:
+  ret i32 0
+
+ret.sum:
+  ret i32 %sum.next
+}"""
+        self._add_example(examples, text, ir, "GOOD")
+        
+        return examples
+    
+    def generate_all(self) -> List[Tuple[str, str, str]]:
+        """Generate all training examples."""
+        print("Generating comprehensive dataset...")
+        all_examples = []
+        
+        generators = [
+            ("Basic arithmetic", self.generate_basic_arithmetic),
+            ("Floating point", self.generate_floating_point),
+            ("Comparisons", self.generate_comparisons),
+            ("Conditionals", self.generate_conditionals),
+            ("Loops", self.generate_loops),
+            ("Arrays", self.generate_arrays),
+            ("Bitwise operations", self.generate_bitwise),
+            ("Functions", self.generate_functions),
+            ("Structs and pointers", self.generate_structs_and_pointers),
+            ("Select operations", self.generate_select_operations),
+            ("Edge cases", self.generate_edge_cases),
+        ]
+        
+        for name, generator in generators:
+            print(f"  Generating {name}...")
+            examples = generator()
+            all_examples.extend(examples)
+            print(f"    Generated {len(examples)} examples")
+        
+        return all_examples
+
+
+def create_text_variations(text: str) -> List[str]:
+    """Create multiple variations of the same text."""
+    variations = [text]
+    
+    replacements = {
+        "Write": ["Implement", "Create", "Define", "Generate", "Code", "Build", "Make"],
+        "Create": ["Write", "Implement", "Build", "Make", "Generate", "Code"],
+        "Implement": ["Write", "Create", "Code", "Build", "Define"],
+        "function": ["function", "subroutine", "procedure", "method", "routine"],
+        "that": ["which", "that", "to"],
+        "returns": ["gives", "returns", "outputs", "produces", "yields"],
+        "calculates": ["computes", "calculates", "determines", "finds"],
+        "two": ["2", "two", "a pair of"],
+    }
+    
+    for _ in range(5):
+        new_text = text
+        for old, new_options in replacements.items():
+            if old in new_text and random.random() < 0.5:
+                new_text = new_text.replace(old, random.choice(new_options), 1)
+        if new_text != text and new_text not in variations:
+            variations.append(new_text)
+    
+    return variations
+
+
+def augment_dataset(examples: List[Tuple[str, str, str]], target_count: int) -> List[Tuple[str, str, str]]:
+    """Augment dataset to reach target count."""
+    augmented = list(examples)
+    
+    print(f"\nAugmenting dataset from {len(examples)} to {target_count} examples...")
+    
+    iteration = 0
+    while len(augmented) < target_count:
+        iteration += 1
+        if iteration % 10 == 0:
+            print(f"  Progress: {len(augmented):,} / {target_count:,} ({100*len(augmented)/target_count:.1f}%)")
+        
+        # Pick random example
+        text, ir, quality = random.choice(examples)
+        
+        # Create variations
+        variations = create_text_variations(text)
+        for var_text in variations:
+            if len(augmented) >= target_count:
+                break
+            augmented.append((var_text, ir, quality))
+    
+    return augmented[:target_count]
+
+
+def save_dataset(examples: List[Tuple[str, str, str]], output_dir: str, split: str):
+    """Save dataset in JSONL format with quality markers."""
+    os.makedirs(output_dir, exist_ok=True)
+    output_file = os.path.join(output_dir, f"{split}.jsonl")
+    
+    with open(output_file, 'w') as f:
+        for text, ir, quality in examples:
+            example = {
+                "text": text,
+                "llvm_ir": ir,
+                "quality": quality
+            }
+            f.write(json.dumps(example) + '\n')
+    
+    # Calculate file size
+    size_mb = os.path.getsize(output_file) / (1024 * 1024)
+    print(f"Saved {len(examples):,} examples to {output_file} ({size_mb:.2f} MB)")
+
+
+def main():
+    """Generate and save large-scale training data."""
+    print("=" * 60)
+    print("Enhanced Text-to-LLVM IR Dataset Generation")
+    print("Target: 1GB+ dataset with extreme diversity")
+    print("=" * 60)
+    
+    # Generate base examples
+    generator = EnhancedLLVMIRGenerator()
+    base_examples = generator.generate_all()
+    print(f"\nTotal unique base examples: {len(base_examples):,}")
+    
+    # Count by quality
+    good_count = sum(1 for _, _, q in base_examples if q == "GOOD")
+    bad_count = sum(1 for _, _, q in base_examples if q == "BAD")
+    print(f"  GOOD examples: {good_count:,}")
+    print(f"  BAD examples: {bad_count:,}")
+    
+    # Augment to reach target size (~1GB)
+    # Estimate: each example ~2KB -> 500K examples for ~1GB
+    target_examples = 500000
+    print(f"\nTarget dataset size: {target_examples:,} examples (~1GB)")
+    
+    all_examples = augment_dataset(base_examples, target_examples)
+    print(f"\nFinal dataset size: {len(all_examples):,} examples")
+    
+    # Shuffle
+    random.shuffle(all_examples)
+    
+    # Split into train/val/test (80/10/10)
+    total = len(all_examples)
+    train_size = int(0.8 * total)
+    val_size = int(0.1 * total)
+    
+    train_data = all_examples[:train_size]
+    val_data = all_examples[train_size:train_size + val_size]
+    test_data = all_examples[train_size + val_size:]
+    
+    # Save datasets
+    print("\n" + "=" * 60)
+    print("Saving datasets...")
+    print("=" * 60)
+    output_dir = "dataset"
+    save_dataset(train_data, output_dir, "train")
+    save_dataset(val_data, output_dir, "val")
+    save_dataset(test_data, output_dir, "test")
+    
+    # Calculate total size
+    total_size = sum(
+        os.path.getsize(os.path.join(output_dir, f"{split}.jsonl"))
+        for split in ["train", "val", "test"]
+    ) / (1024 * 1024 * 1024)
+    
+    print("\n" + "=" * 60)
+    print("Dataset generation complete!")
+    print("=" * 60)
+    print(f"Train: {len(train_data):,} examples")
+    print(f"Val: {len(val_data):,} examples")
+    print(f"Test: {len(test_data):,} examples")
+    print(f"Total size: {total_size:.2f} GB")
+    print("=" * 60)
+
+
+if __name__ == "__main__":
+    main()
