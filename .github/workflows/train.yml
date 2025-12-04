@@ -110,7 +110,12 @@ jobs:
           python training/train.py \
             --num_epochs ${{ github.event.inputs.num_epochs || '10' }} \
             --batch_size ${{ github.event.inputs.batch_size || '8' }} \
-            --output_dir checkpoints
+            --gradient_accumulation_steps 4 \
+            --output_dir checkpoints \
+            --use_amp \
+            --use_gradient_checkpointing \
+            --num_workers 2 \
+            --early_stopping_patience 3
       
       - name: Upload model checkpoint
         uses: actions/upload-artifact@v4

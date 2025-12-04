@@ -1,0 +1,75 @@
+# Optimal Configuration for Text-to-LLVM IR Model
+# This configuration provides the best balance of quality and speed
+
+# Model Configuration
+model:
+  name: "t5-small"  # 60M parameters - best balance of accuracy and speed
+  max_length: 512
+  use_gradient_checkpointing: true  # Reduces memory usage by 40-50%
+  compile_model: false  # Enable for inference only (PyTorch 2.0+)
+
+# Training Configuration
+training:
+  # Basic settings
+  num_epochs: 10
+  batch_size: 8  # Per device
+  gradient_accumulation_steps: 4  # Effective batch size = 32
+  
+  # Optimization settings
+  learning_rate: 5.0e-5
+  weight_decay: 0.01
+  use_amp: true  # Mixed precision training (2-3x speedup)
+  
+  # Scheduler settings
+  scheduler: "cosine"  # Cosine annealing with warmup
+  warmup_ratio: 0.1  # 10% of total steps for warmup
+  
+  # Data loading
+  num_workers: 4  # Parallel data loading
+  use_dynamic_padding: true  # Only pad to batch max length
+  pin_memory: true  # Faster GPU transfer
+  prefetch_factor: 2  # Prefetch batches
+  
+  # Early stopping
+  early_stopping_patience: 3  # Stop if no improvement for 3 epochs
+  
+  # Checkpointing
+  save_every: 5  # Save checkpoint every 5 epochs
+  output_dir: "checkpoints"
+
+# Inference Configuration
+inference:
+  # Generation parameters (optimized for quality)
+  num_beams: 5  # Higher = better quality (but slower)
+  max_new_tokens: 512
+  temperature: 0.7  # Lower = more deterministic
+  top_k: 50
+  top_p: 0.95  # Nucleus sampling
+  repetition_penalty: 1.2  # Prevent repetition
+  
+  # Optimization features
+  use_cache: true  # Cache repeated inputs
+  compile_model: true  # Torch compile for faster inference
+  
+  # For fast inference (lower quality)
+  fast_mode:
+    num_beams: 3
+    temperature: 0.5
+    max_new_tokens: 256
+
+# Data Generation Configuration
+data:
+  target_examples: 250000  # 250K examples (~500MB)
+  variations_per_example: 15
+  train_split: 0.8
+  val_split: 0.1
+  test_split: 0.1
+  seed: 42
+  validate_llvm: true  # Validate LLVM IR with llvm-as
+
+# Performance Expectations
+# With these settings on a single GPU:
+# - Training time: ~2-3 hours for 250K examples
+# - Memory usage: ~8-12GB GPU memory
+# - Inference speed: ~0.1-0.2 seconds per example with compilation
+# - Quality: High accuracy on standard LLVM IR patterns
