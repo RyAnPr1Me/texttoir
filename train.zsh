@@ -13,7 +13,17 @@
 set -e  # Exit on error
 
 # Ensure we're in the repository root directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Compatible with both bash and zsh
+if [[ -n "$BASH_SOURCE" ]]; then
+    # bash
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+elif [[ -n "$ZSH_VERSION" ]]; then
+    # zsh
+    SCRIPT_DIR="$(cd "$(dirname "${(%):-%x}")" && pwd)"
+else
+    # fallback
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+fi
 cd "$SCRIPT_DIR"
 
 # Verify we're in the texttoir repository
@@ -600,17 +610,17 @@ echo ""
 echo "Next Steps:"
 echo ""
 echo "1. Test the model with interactive inference:"
-echo "   ${BLUE}python3 inference.py --model_path $OUTPUT_DIR --interactive${NC}"
+echo "   ${BLUE}$PYTHON_CMD inference.py --model_path $OUTPUT_DIR --interactive${NC}"
 echo ""
 echo "2. Generate LLVM IR from text:"
-echo "   ${BLUE}python3 inference.py --model_path $OUTPUT_DIR --text \"Write a function that adds two integers\"${NC}"
+echo "   ${BLUE}$PYTHON_CMD inference.py --model_path $OUTPUT_DIR --text \"Write a function that adds two integers\"${NC}"
 echo ""
 if [[ "$QUANTIZE" == true ]]; then
     echo "3. Use quantized model for faster inference:"
-    echo "   ${BLUE}python3 inference.py --model_path ${OUTPUT_DIR}_quantized --interactive${NC}"
+    echo "   ${BLUE}$PYTHON_CMD inference.py --model_path ${OUTPUT_DIR}_quantized --interactive${NC}"
     echo ""
 fi
-echo "For more options, see: ${BLUE}python3 inference.py --help${NC}"
+echo "For more options, see: ${BLUE}$PYTHON_CMD inference.py --help${NC}"
 echo ""
 print_info "Happy coding! 🚀"
 echo ""
