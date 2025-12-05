@@ -358,29 +358,35 @@ if [[ "$DEVICE" == "CUDA" ]]; then
     
     # Auto-tune batch size based on GPU memory
     GPU_MEMORY_INT=${GPU_MEMORY%%.*}  # Remove everything after first dot for integer comparison
-    if [[ $GPU_MEMORY_INT -ge 24 ]]; then
-        # High-end GPU (24GB+): Use larger batch sizes for maximum speed
-        if [[ $BATCH_SIZE -eq 8 ]]; then
-            BATCH_SIZE=16
-            print_info "Auto-tuned batch size to 16 for high-end GPU"
-        fi
-        if [[ $NUM_WORKERS -eq 4 ]]; then
-            NUM_WORKERS=8
-            print_info "Auto-tuned data workers to 8 for maximum throughput"
-        fi
-    elif [[ $GPU_MEMORY_INT -ge 16 ]]; then
-        # Mid-range GPU (16-24GB): Use moderate batch sizes
-        if [[ $BATCH_SIZE -eq 8 ]]; then
-            BATCH_SIZE=12
-            print_info "Auto-tuned batch size to 12 for mid-range GPU"
-        fi
-        if [[ $NUM_WORKERS -eq 4 ]]; then
-            NUM_WORKERS=6
-            print_info "Auto-tuned data workers to 6 for better throughput"
+    
+    # Validate GPU memory is a number
+    if [[ "$GPU_MEMORY_INT" =~ ^[0-9]+$ ]]; then
+        if [[ $GPU_MEMORY_INT -ge 24 ]]; then
+            # High-end GPU (24GB+): Use larger batch sizes for maximum speed
+            if [[ $BATCH_SIZE -eq 8 ]]; then
+                BATCH_SIZE=16
+                print_info "Auto-tuned batch size to 16 for high-end GPU"
+            fi
+            if [[ $NUM_WORKERS -eq 4 ]]; then
+                NUM_WORKERS=8
+                print_info "Auto-tuned data workers to 8 for maximum throughput"
+            fi
+        elif [[ $GPU_MEMORY_INT -ge 16 ]]; then
+            # Mid-range GPU (16-24GB): Use moderate batch sizes
+            if [[ $BATCH_SIZE -eq 8 ]]; then
+                BATCH_SIZE=12
+                print_info "Auto-tuned batch size to 12 for mid-range GPU"
+            fi
+            if [[ $NUM_WORKERS -eq 4 ]]; then
+                NUM_WORKERS=6
+                print_info "Auto-tuned data workers to 6 for better throughput"
+            fi
+        else
+            # Lower-end GPU (<16GB): Keep reasonable settings
+            print_info "Using default settings for GPU with ${GPU_MEMORY}GB VRAM"
         fi
     else
-        # Lower-end GPU (<16GB): Keep reasonable settings
-        print_info "Using default settings for GPU with ${GPU_MEMORY}GB VRAM"
+        print_warning "Could not parse GPU memory, using default settings"
     fi
     
     # Enable TF32 for Ampere+ GPUs (automatic in training script)
@@ -459,11 +465,23 @@ else
     print_info "This may take several minutes..."
     echo ""
     
+    # Build data generation command as array for safe execution
     if [[ "$DATASET_SIZE" == "quick" ]]; then
-        $PYTHON_CMD data/generate_data_large.py --quick-test --output-dir "$DATA_DIR"
+        DATA_GEN_ARGS=(
+            "$PYTHON_CMD" "data/generate_data_large.py"
+            "--quick-test"
+            "--output-dir" "$DATA_DIR"
+        )
     else
-        $PYTHON_CMD data/generate_data_large.py --target-examples $TARGET_EXAMPLES --output-dir "$DATA_DIR"
+        DATA_GEN_ARGS=(
+            "$PYTHON_CMD" "data/generate_data_large.py"
+            "--target-examples" "$TARGET_EXAMPLES"
+            "--output-dir" "$DATA_DIR"
+        )
     fi
+    
+    # Execute data generation safely with array expansion
+    "${DATA_GEN_ARGS[@]}"
     
     if [[ $? -eq 0 ]]; then
         print_success "Data generation completed successfully"
