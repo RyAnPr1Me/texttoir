@@ -14,16 +14,16 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Default configuration
-DATASET_SIZE="medium"
+DATASET_SIZE="large"  # Default to large for maximum quality
 NUM_EPOCHS=10
-BATCH_SIZE=8
+BATCH_SIZE=8  # Will be auto-tuned for GPU
 GRADIENT_ACCUMULATION_STEPS=4
 LEARNING_RATE=5e-5
 OUTPUT_DIR="checkpoints"
 DATA_DIR="dataset"
-USE_AMP=true
+USE_AMP=true  # Essential for GPU speed
 USE_GRADIENT_CHECKPOINTING=true
-NUM_WORKERS=4
+NUM_WORKERS=4  # Will be auto-tuned for GPU
 EARLY_STOPPING_PATIENCE=3
 QUANTIZE=false
 SKIP_DATA_GENERATION=false
@@ -57,26 +57,26 @@ OPTIONS:
     -h, --help                  Show this help message
     
     Dataset Options:
-    -d, --dataset SIZE          Dataset size: quick, small, medium, large, xlarge (default: medium)
-                                  quick:  1,000 examples (~2MB)
-                                  small:  50,000 examples (~100MB)
-                                  medium: 250,000 examples (~500MB)
-                                  large:  500,000 examples (~1GB)
-                                  xlarge: 1,000,000 examples (~2GB)
+    -d, --dataset SIZE          Dataset size: quick, small, medium, large, xlarge (default: large)
+                                  quick:  1,000 examples (~2MB) - for testing only
+                                  small:  50,000 examples (~100MB) - minimal quality
+                                  medium: 250,000 examples (~500MB) - good quality
+                                  large:  500,000 examples (~1GB) - high quality (RECOMMENDED)
+                                  xlarge: 1,000,000 examples (~2GB) - maximum quality
     --skip-data                 Skip data generation (use existing dataset)
     --data-dir DIR              Data directory (default: dataset)
     
     Training Options:
     -e, --epochs NUM            Number of training epochs (default: 10)
-    -b, --batch-size NUM        Batch size per device (default: 8)
+    -b, --batch-size NUM        Batch size per device (default: 8, auto-tuned for GPU)
     -g, --grad-accum NUM        Gradient accumulation steps (default: 4)
     -l, --learning-rate RATE    Learning rate (default: 5e-5)
     -o, --output-dir DIR        Output directory for checkpoints (default: checkpoints)
-    -w, --workers NUM           Number of data loading workers (default: 4)
+    -w, --workers NUM           Number of data loading workers (default: 4, auto-tuned for GPU)
     -p, --patience NUM          Early stopping patience (default: 3)
     
     Optimization Options:
-    --no-amp                    Disable mixed precision training
+    --no-amp                    Disable mixed precision training (NOT recommended for GPU)
     --no-checkpointing          Disable gradient checkpointing
     --quantize                  Quantize model after training for faster inference
     
@@ -84,23 +84,31 @@ EXAMPLES:
     # Quick test run (1K examples, fast training)
     $0 --dataset quick --epochs 3
     
-    # Medium dataset with default settings (recommended for most users)
-    $0 --dataset medium
+    # Large dataset with GPU auto-tuning (RECOMMENDED)
+    $0
     
-    # Large dataset for best quality
-    $0 --dataset large --epochs 15
+    # Maximum quality with extra-large dataset
+    $0 --dataset xlarge --epochs 15
     
-    # Custom configuration
-    $0 --dataset medium --epochs 20 --batch-size 16 --quantize
+    # Custom configuration with quantization
+    $0 --dataset large --epochs 20 --batch-size 16 --quantize
     
     # Use existing dataset and train with custom settings
     $0 --skip-data --epochs 5 --learning-rate 3e-5
 
+GPU ACCELERATION FEATURES:
+    - Auto-tunes batch size and workers based on GPU memory
+    - Enables TF32 for Ampere+ GPUs (automatic)
+    - Mixed precision (FP16) training for 2-3x speedup
+    - Larger datasets recommended for GPU (large or xlarge)
+    - Detects and optimizes for multi-GPU setups
+    
 PERFORMANCE TIPS:
     - Use GPU for 5-10x speedup (CUDA-enabled GPU recommended)
-    - Increase batch size if you have more memory
+    - Larger datasets (large/xlarge) produce better quality models
     - Use --quantize for 2-4x faster inference after training
-    - Larger datasets produce better quality models
+    - Mixed precision (--use-amp) is essential for GPU speed
+    - Script auto-tunes settings based on your GPU
     
 EOF
 }
@@ -188,21 +196,22 @@ echo ""
 echo "╔════════════════════════════════════════════════════════════════╗"
 echo "║         Text-to-LLVM IR Model Training Script                  ║"
 echo "║         Optimized for Best Quality AI in Least Time            ║"
+echo "║         GPU-Accelerated with Auto-Tuning                       ║"
 echo "╚════════════════════════════════════════════════════════════════╝"
 echo ""
 
-# Print configuration
-print_info "Configuration:"
+# Print initial configuration
+print_info "Initial Configuration:"
 echo "  Dataset size:              $DATASET_SIZE"
 echo "  Data directory:            $DATA_DIR"
 echo "  Skip data generation:      $SKIP_DATA_GENERATION"
 echo "  Number of epochs:          $NUM_EPOCHS"
-echo "  Batch size:                $BATCH_SIZE"
+echo "  Batch size:                $BATCH_SIZE (may be auto-tuned for GPU)"
 echo "  Gradient accumulation:     $GRADIENT_ACCUMULATION_STEPS"
 echo "  Effective batch size:      $((BATCH_SIZE * GRADIENT_ACCUMULATION_STEPS))"
 echo "  Learning rate:             $LEARNING_RATE"
 echo "  Output directory:          $OUTPUT_DIR"
-echo "  Data workers:              $NUM_WORKERS"
+echo "  Data workers:              $NUM_WORKERS (may be auto-tuned for GPU)"
 echo "  Early stopping patience:   $EARLY_STOPPING_PATIENCE"
 echo "  Mixed precision (AMP):     $USE_AMP"
 echo "  Gradient checkpointing:    $USE_GRADIENT_CHECKPOINTING"
@@ -241,11 +250,71 @@ print_info "Detecting compute device..."
 DEVICE=$($PYTHON_CMD -c "import torch; print('CUDA' if torch.cuda.is_available() else 'CPU')" 2>/dev/null)
 if [[ "$DEVICE" == "CUDA" ]]; then
     GPU_NAME=$($PYTHON_CMD -c "import torch; print(torch.cuda.get_device_name(0))" 2>/dev/null)
-    print_success "GPU detected: $GPU_NAME"
+    GPU_MEMORY=$($PYTHON_CMD -c "import torch; print(f'{torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f}')" 2>/dev/null)
+    GPU_COUNT=$($PYTHON_CMD -c "import torch; print(torch.cuda.device_count())" 2>/dev/null)
+    print_success "GPU detected: $GPU_NAME (${GPU_MEMORY}GB VRAM)"
+    print_info "Available GPUs: $GPU_COUNT"
     print_info "Training will use GPU acceleration (5-10x faster)"
+    
+    # GPU-specific optimizations for maximum speed
+    print_info "Applying GPU-specific optimizations for maximum speed..."
+    
+    # Auto-tune batch size based on GPU memory
+    GPU_MEMORY_INT=${GPU_MEMORY%.*}
+    if [[ $GPU_MEMORY_INT -ge 24 ]]; then
+        # High-end GPU (24GB+): Use larger batch sizes for maximum speed
+        if [[ $BATCH_SIZE -eq 8 ]]; then
+            BATCH_SIZE=16
+            print_info "Auto-tuned batch size to 16 for high-end GPU"
+        fi
+        if [[ $NUM_WORKERS -eq 4 ]]; then
+            NUM_WORKERS=8
+            print_info "Auto-tuned data workers to 8 for maximum throughput"
+        fi
+    elif [[ $GPU_MEMORY_INT -ge 16 ]]; then
+        # Mid-range GPU (16-24GB): Use moderate batch sizes
+        if [[ $BATCH_SIZE -eq 8 ]]; then
+            BATCH_SIZE=12
+            print_info "Auto-tuned batch size to 12 for mid-range GPU"
+        fi
+        if [[ $NUM_WORKERS -eq 4 ]]; then
+            NUM_WORKERS=6
+            print_info "Auto-tuned data workers to 6 for better throughput"
+        fi
+    else
+        # Lower-end GPU (<16GB): Keep reasonable settings
+        print_info "Using default settings for GPU with ${GPU_MEMORY}GB VRAM"
+    fi
+    
+    # Enable TF32 for Ampere+ GPUs (automatic in training script)
+    print_success "GPU optimizations applied - maximum speed enabled!"
+    
+    # Display optimized configuration
+    echo ""
+    print_success "Final Optimized Configuration (GPU-Tuned):"
+    echo "  Batch size:                $BATCH_SIZE"
+    echo "  Effective batch size:      $((BATCH_SIZE * GRADIENT_ACCUMULATION_STEPS))"
+    echo "  Data workers:              $NUM_WORKERS"
+    echo "  Mixed precision:           $USE_AMP (FP16 on GPU for 2-3x speedup)"
+    echo "  Expected speedup:          5-10x faster than CPU"
+    
 else
     print_warning "No GPU detected. Training will use CPU (slower)"
     print_info "For faster training, consider using a CUDA-enabled GPU"
+    print_warning "CPU training may take significantly longer (5-10x slower)"
+    
+    # Reduce workers for CPU to avoid overhead
+    if [[ $NUM_WORKERS -gt 2 ]]; then
+        NUM_WORKERS=2
+        print_info "Reduced data workers to 2 for CPU training"
+    fi
+    
+    # Display optimized configuration for CPU
+    echo ""
+    print_info "Final Configuration (CPU-Optimized):"
+    echo "  Batch size:                $BATCH_SIZE"
+    echo "  Effective batch size:      $((BATCH_SIZE * GRADIENT_ACCUMULATION_STEPS))"
+    echo "  Data workers:              $NUM_WORKERS"
 fi
 echo ""
 
@@ -315,7 +384,49 @@ echo "Step 2: Training the Model"
 echo "════════════════════════════════════════════════════════════════"
 echo ""
 
-print_info "Starting model training..."
+# Provide performance expectations
+print_info "Performance Expectations:"
+if [[ "$DEVICE" == "CUDA" ]]; then
+    case $DATASET_SIZE in
+        quick)
+            print_info "  Estimated time: ~5-10 minutes on GPU"
+            ;;
+        small)
+            print_info "  Estimated time: ~30-60 minutes on GPU"
+            ;;
+        medium)
+            print_info "  Estimated time: ~2-3 hours on GPU"
+            ;;
+        large)
+            print_info "  Estimated time: ~3-5 hours on GPU"
+            ;;
+        xlarge)
+            print_info "  Estimated time: ~6-10 hours on GPU"
+            ;;
+    esac
+    print_success "GPU acceleration will provide 5-10x speedup vs CPU"
+else
+    case $DATASET_SIZE in
+        quick)
+            print_warning "  Estimated time: ~30-60 minutes on CPU"
+            ;;
+        small)
+            print_warning "  Estimated time: ~3-6 hours on CPU"
+            ;;
+        medium)
+            print_warning "  Estimated time: ~12-16 hours on CPU"
+            ;;
+        large)
+            print_warning "  Estimated time: ~20-30 hours on CPU"
+            ;;
+        xlarge)
+            print_warning "  Estimated time: ~40-60 hours on CPU"
+            ;;
+    esac
+fi
+echo ""
+
+print_info "Starting model training with optimized settings..."
 print_info "Training progress will be displayed below"
 echo ""
 

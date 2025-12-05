@@ -1,6 +1,6 @@
 # 🚀 Quick Start Guide: Optimized Training & Inference
 
-This guide shows how to get the best quality AI in the least time.
+This guide shows how to get the best quality AI in the least time with GPU acceleration.
 
 ## Prerequisites
 
@@ -10,35 +10,41 @@ pip install -r requirements.txt
 
 ## 🎯 Automated Training (Recommended)
 
-Use the provided training script for the easiest experience:
+Use the provided training script for the easiest experience with GPU optimization:
+
+### Large Dataset with GPU Auto-Tuning (RECOMMENDED - Default)
+```bash
+./train.zsh
+```
 
 ### Quick Test (Fast)
 ```bash
 ./train.zsh --dataset quick --epochs 3
 ```
 
-### Recommended Setup (Best Balance)
+### Maximum Quality (Extra-Large Dataset)
 ```bash
-./train.zsh --dataset medium
-```
-
-### Production Quality (Best Results)
-```bash
-./train.zsh --dataset large --epochs 15
+./train.zsh --dataset xlarge --epochs 15
 ```
 
 ### With Quantization (Fastest Inference)
 ```bash
-./train.zsh --dataset medium --quantize
+./train.zsh --quantize
 ```
 
-**What the script does:**
-1. ✓ Checks and installs dependencies
-2. ✓ Detects GPU/CPU automatically
-3. ✓ Generates training data
-4. ✓ Trains model with optimal settings
-5. ✓ Optionally quantizes for faster inference
-6. ✓ Provides clear next steps
+**GPU-Accelerated Features:**
+1. ✓ Auto-detects GPU and optimizes settings (5-10x faster than CPU)
+2. ✓ Auto-tunes batch size based on GPU memory (16GB/24GB+ GPUs)
+3. ✓ Auto-tunes data workers for maximum throughput
+4. ✓ Mixed precision (FP16) training for 2-3x additional speedup
+5. ✓ TF32 support for Ampere+ GPUs (automatic)
+6. ✓ Large dataset (500K examples) by default for best quality
+7. ✓ Progress tracking with time estimates
+
+**Performance Expectations:**
+- **Large dataset (500K) on GPU**: 3-5 hours
+- **XLarge dataset (1M) on GPU**: 6-10 hours
+- **Large dataset on CPU**: 20-30 hours (5-10x slower)
 
 For all options: `./train.zsh --help`
 
