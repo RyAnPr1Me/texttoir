@@ -1,36 +1,67 @@
 # 🚀 Quick Start Guide: Optimized Training & Inference
 
 This guide shows how to get the best quality AI in the least time with GPU acceleration.
+**Perfect for freshly cloned repositories** - the script handles all setup automatically!
 
 ## Prerequisites
 
+Just Python 3.8+ - that's it! The script installs everything else automatically.
+
 ```bash
-pip install -r requirements.txt
+# Check your Python version
+python3 --version  # Should be 3.8 or higher
 ```
 
 ## 🎯 Automated Training (Recommended)
 
-Use the provided training script for the easiest experience with GPU optimization:
+After cloning the repository, just run the training script. It handles everything!
+
+```bash
+git clone https://github.com/RyAnPr1Me/texttoir.git
+cd texttoir
+./train.zsh
+```
 
 ### Large Dataset with GPU Auto-Tuning (RECOMMENDED - Default)
 ```bash
 ./train.zsh
 ```
+This will:
+1. Check Python version
+2. Install all dependencies from requirements.txt
+3. Detect GPU and auto-tune settings
+4. Generate 500K training examples (large dataset)
+5. Train model with optimal settings
 
 ### Quick Test (Fast)
 ```bash
 ./train.zsh --dataset quick --epochs 3
 ```
+For testing only - uses 1K examples, trains in minutes
 
 ### Maximum Quality (Extra-Large Dataset)
 ```bash
 ./train.zsh --dataset xlarge --epochs 15
 ```
+Uses 1M examples for best possible quality (takes 6-10 hours on GPU)
 
 ### With Quantization (Fastest Inference)
 ```bash
 ./train.zsh --quantize
 ```
+Adds INT8 quantization step for 2-4x faster inference
+
+**What the script does automatically:**
+1. ✓ Verifies you're in the texttoir repository
+2. ✓ Checks Python 3.8+ is installed
+3. ✓ Installs all dependencies from requirements.txt
+4. ✓ Detects GPU and displays specs (name, VRAM, count)
+5. ✓ Auto-tunes batch size for your GPU (16 for 24GB+, 12 for 16-24GB)
+6. ✓ Auto-tunes workers for maximum throughput (6-8 on high-end GPUs)
+7. ✓ Generates training data with LLVM validation
+8. ✓ Trains model with mixed precision (FP16) on GPU
+9. ✓ Optionally quantizes model for faster inference
+10. ✓ Provides next steps for using your trained model
 
 **GPU-Accelerated Features:**
 1. ✓ Auto-detects GPU and optimizes settings (5-10x faster than CPU)

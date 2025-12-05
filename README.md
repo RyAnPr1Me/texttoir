@@ -62,7 +62,12 @@ git clone https://github.com/RyAnPr1Me/texttoir.git
 cd texttoir
 ```
 
-2. Install dependencies:
+2. Run the training script (it will install dependencies automatically):
+```bash
+./train.zsh
+```
+
+Or manually install dependencies first:
 ```bash
 pip install -r requirements.txt
 ```
@@ -71,9 +76,12 @@ pip install -r requirements.txt
 
 ## 🚀 Quick Start: Automated Training Script (Recommended)
 
-The easiest way to train the model is using the provided training script:
+**Perfect for freshly cloned repositories!** The training script handles everything automatically.
 
 ```bash
+# After cloning, just run from the repo root:
+cd texttoir
+
 # Large dataset with GPU auto-tuning (RECOMMENDED - default)
 ./train.zsh
 
@@ -87,11 +95,20 @@ The easiest way to train the model is using the provided training script:
 ./train.zsh --dataset large --epochs 20 --quantize
 ```
 
+**The script automatically handles:**
+- ✓ Verifies repository structure
+- ✓ Checks Python version (requires 3.8+)
+- ✓ Installs all dependencies from requirements.txt
+- ✓ Detects and optimizes for GPU (5-10x faster)
+- ✓ Generates training data with validation
+- ✓ Trains model with optimal hyperparameters
+- ✓ Optional model quantization
+
 **GPU-Accelerated Features:**
-- ✓ Automatically detects and optimizes for GPU (5-10x faster)
-- ✓ Auto-tunes batch size and workers based on GPU memory
-- ✓ Enables mixed precision (FP16) for 2-3x additional speedup
-- ✓ Default large dataset (500K examples) for maximum quality
+- ✓ Auto-tunes batch size based on GPU memory
+- ✓ Auto-tunes data workers for maximum throughput
+- ✓ Enables mixed precision (FP16) for 2-3x speedup
+- ✓ Default large dataset (500K examples) for best quality
 - ✓ TF32 support for Ampere+ GPUs (automatic)
 - ✓ Progress tracking and error handling
 

@@ -4,10 +4,24 @@
 # This script automates the complete workflow for training the model on your device
 # Compatible with both bash and zsh (tested with bash 4.0+, zsh 5.0+)
 #
+# Assumes this script is in a freshly cloned texttoir repository
+# Run from the repository root directory: ./train.zsh [options]
+#
 # For zsh users: You can also run directly with: zsh train.zsh [options]
 # For bash users: Run with: bash train.zsh [options] or ./train.zsh [options]
 
 set -e  # Exit on error
+
+# Ensure we're in the repository root directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Verify we're in the texttoir repository
+if [[ ! -f "requirements.txt" ]] || [[ ! -d "training" ]] || [[ ! -d "model" ]]; then
+    echo "ERROR: This script must be run from the texttoir repository root directory"
+    echo "Expected files/directories: requirements.txt, training/, model/"
+    exit 1
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -110,7 +124,8 @@ PERFORMANCE TIPS:
     - Use GPU for 5-10x speedup (CUDA-enabled GPU recommended)
     - Larger datasets (large/xlarge) produce better quality models
     - Use --quantize for 2-4x faster inference after training
-    - Mixed precision (--use-amp) is essential for GPU speed
+    - Mixed precision (AMP) is enabled by default for GPU speed
+    - Use --no-amp to disable mixed precision (not recommended for GPU)
     - Script auto-tunes settings based on your GPU
     
 EOF
@@ -124,6 +139,10 @@ while [[ $# -gt 0 ]]; do
             exit 0
             ;;
         -d|--dataset)
+            if [[ -z "$2" || "$2" == -* ]]; then
+                print_error "Option --dataset requires a value"
+                exit 1
+            fi
             DATASET_SIZE="$2"
             shift 2
             ;;
@@ -132,34 +151,66 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --data-dir)
+            if [[ -z "$2" || "$2" == -* ]]; then
+                print_error "Option --data-dir requires a value"
+                exit 1
+            fi
             DATA_DIR="$2"
             shift 2
             ;;
         -e|--epochs)
+            if [[ -z "$2" || "$2" == -* ]]; then
+                print_error "Option --epochs requires a value"
+                exit 1
+            fi
             NUM_EPOCHS="$2"
             shift 2
             ;;
         -b|--batch-size)
+            if [[ -z "$2" || "$2" == -* ]]; then
+                print_error "Option --batch-size requires a value"
+                exit 1
+            fi
             BATCH_SIZE="$2"
             shift 2
             ;;
         -g|--grad-accum)
+            if [[ -z "$2" || "$2" == -* ]]; then
+                print_error "Option --grad-accum requires a value"
+                exit 1
+            fi
             GRADIENT_ACCUMULATION_STEPS="$2"
             shift 2
             ;;
         -l|--learning-rate)
+            if [[ -z "$2" || "$2" == -* ]]; then
+                print_error "Option --learning-rate requires a value"
+                exit 1
+            fi
             LEARNING_RATE="$2"
             shift 2
             ;;
         -o|--output-dir)
+            if [[ -z "$2" || "$2" == -* ]]; then
+                print_error "Option --output-dir requires a value"
+                exit 1
+            fi
             OUTPUT_DIR="$2"
             shift 2
             ;;
         -w|--workers)
+            if [[ -z "$2" || "$2" == -* ]]; then
+                print_error "Option --workers requires a value"
+                exit 1
+            fi
             NUM_WORKERS="$2"
             shift 2
             ;;
         -p|--patience)
+            if [[ -z "$2" || "$2" == -* ]]; then
+                print_error "Option --patience requires a value"
+                exit 1
+            fi
             EARLY_STOPPING_PATIENCE="$2"
             shift 2
             ;;
@@ -202,8 +253,14 @@ echo "║         Optimized for Best Quality AI in Least Time            ║"
 echo "║         GPU-Accelerated with Auto-Tuning                       ║"
 echo "╚════════════════════════════════════════════════════════════════╝"
 echo ""
+print_info "Welcome! This script will guide you through training the model."
+print_info "Perfect for a freshly cloned repository - all setup is automated."
+echo ""
 
 # Print initial configuration
+print_info "Repository: texttoir (freshly cloned)"
+print_info "Working directory: $SCRIPT_DIR"
+echo ""
 print_info "Initial Configuration:"
 echo "  Dataset size:              $DATASET_SIZE"
 echo "  Data directory:            $DATA_DIR"
@@ -222,8 +279,15 @@ echo "  Quantize after training:   $QUANTIZE"
 echo ""
 
 # Check if Python is available
+print_info "Checking Python installation..."
 if ! command -v python3 &> /dev/null; then
-    print_error "Python 3 is not installed. Please install Python 3.8 or higher."
+    print_error "Python 3 is not installed"
+    print_error "Please install Python 3.8 or higher and try again"
+    echo ""
+    echo "Installation instructions:"
+    echo "  Ubuntu/Debian: sudo apt install python3 python3-pip"
+    echo "  macOS: brew install python3"
+    echo "  Or download from: https://www.python.org/downloads/"
     exit 1
 fi
 
@@ -231,17 +295,37 @@ PYTHON_CMD="python3"
 
 # Check Python version
 PYTHON_VERSION=$($PYTHON_CMD --version 2>&1 | awk '{print $2}')
-print_info "Using Python $PYTHON_VERSION"
+PYTHON_MAJOR=$($PYTHON_CMD -c "import sys; print(sys.version_info.major)")
+PYTHON_MINOR=$($PYTHON_CMD -c "import sys; print(sys.version_info.minor)")
+print_success "Found Python $PYTHON_VERSION"
+
+# Verify Python version is 3.8 or higher
+if [[ $PYTHON_MAJOR -lt 3 ]] || [[ $PYTHON_MAJOR -eq 3 && $PYTHON_MINOR -lt 8 ]]; then
+    print_error "Python version $PYTHON_VERSION is too old"
+    print_error "This project requires Python 3.8 or higher"
+    echo ""
+    echo "Please upgrade Python and try again"
+    exit 1
+fi
 
 # Check if requirements are installed
-print_info "Checking dependencies..."
+print_info "Checking dependencies from requirements.txt..."
 if ! $PYTHON_CMD -c "import torch; import transformers" 2>/dev/null; then
-    print_warning "Required packages not found. Installing dependencies..."
+    print_warning "Required packages not found in fresh clone"
+    print_info "Installing dependencies (this may take several minutes)..."
+    echo ""
+    
+    # Install dependencies with progress
+    $PYTHON_CMD -m pip install --upgrade pip
     $PYTHON_CMD -m pip install -r requirements.txt
+    
     if [[ $? -eq 0 ]]; then
-        print_success "Dependencies installed successfully"
+        print_success "Dependencies installed successfully from requirements.txt"
     else
         print_error "Failed to install dependencies"
+        echo ""
+        echo "Try installing manually with:"
+        echo "  python3 -m pip install -r requirements.txt"
         exit 1
     fi
 else
@@ -478,10 +562,16 @@ if [[ "$QUANTIZE" == true ]]; then
     print_info "Output directory: $QUANTIZED_DIR"
     echo ""
     
-    $PYTHON_CMD quantize_model.py \
-        --model_path "$OUTPUT_DIR" \
-        --output_dir "$QUANTIZED_DIR" \
-        --quantization_type dynamic
+    # Build quantization command as array for safe execution
+    QUANTIZE_ARGS=(
+        "$PYTHON_CMD" "quantize_model.py"
+        "--model_path" "$OUTPUT_DIR"
+        "--output_dir" "$QUANTIZED_DIR"
+        "--quantization_type" "dynamic"
+    )
+    
+    # Execute quantization safely with array expansion
+    "${QUANTIZE_ARGS[@]}"
     
     if [[ $? -eq 0 ]]; then
         print_success "Model quantization completed successfully"
