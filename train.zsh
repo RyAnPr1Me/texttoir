@@ -1,0 +1,410 @@
+#!/usr/bin/env bash
+
+# Text-to-LLVM IR Model Training Script
+# This script automates the complete workflow for training the model on your device
+# Compatible with both bash and zsh
+
+set -e  # Exit on error
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Default configuration
+DATASET_SIZE="medium"
+NUM_EPOCHS=10
+BATCH_SIZE=8
+GRADIENT_ACCUMULATION_STEPS=4
+LEARNING_RATE=5e-5
+OUTPUT_DIR="checkpoints"
+DATA_DIR="dataset"
+USE_AMP=true
+USE_GRADIENT_CHECKPOINTING=true
+NUM_WORKERS=4
+EARLY_STOPPING_PATIENCE=3
+QUANTIZE=false
+SKIP_DATA_GENERATION=false
+
+# Function to print colored messages
+print_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Function to print usage
+print_usage() {
+    cat << EOF
+Usage: $0 [OPTIONS]
+
+Text-to-LLVM IR Model Training Script
+Automates data generation and model training on your device.
+
+OPTIONS:
+    -h, --help                  Show this help message
+    
+    Dataset Options:
+    -d, --dataset SIZE          Dataset size: quick, small, medium, large, xlarge (default: medium)
+                                  quick:  1,000 examples (~2MB)
+                                  small:  50,000 examples (~100MB)
+                                  medium: 250,000 examples (~500MB)
+                                  large:  500,000 examples (~1GB)
+                                  xlarge: 1,000,000 examples (~2GB)
+    --skip-data                 Skip data generation (use existing dataset)
+    --data-dir DIR              Data directory (default: dataset)
+    
+    Training Options:
+    -e, --epochs NUM            Number of training epochs (default: 10)
+    -b, --batch-size NUM        Batch size per device (default: 8)
+    -g, --grad-accum NUM        Gradient accumulation steps (default: 4)
+    -l, --learning-rate RATE    Learning rate (default: 5e-5)
+    -o, --output-dir DIR        Output directory for checkpoints (default: checkpoints)
+    -w, --workers NUM           Number of data loading workers (default: 4)
+    -p, --patience NUM          Early stopping patience (default: 3)
+    
+    Optimization Options:
+    --no-amp                    Disable mixed precision training
+    --no-checkpointing          Disable gradient checkpointing
+    --quantize                  Quantize model after training for faster inference
+    
+EXAMPLES:
+    # Quick test run (1K examples, fast training)
+    $0 --dataset quick --epochs 3
+    
+    # Medium dataset with default settings (recommended for most users)
+    $0 --dataset medium
+    
+    # Large dataset for best quality
+    $0 --dataset large --epochs 15
+    
+    # Custom configuration
+    $0 --dataset medium --epochs 20 --batch-size 16 --quantize
+    
+    # Use existing dataset and train with custom settings
+    $0 --skip-data --epochs 5 --learning-rate 3e-5
+
+PERFORMANCE TIPS:
+    - Use GPU for 5-10x speedup (CUDA-enabled GPU recommended)
+    - Increase batch size if you have more memory
+    - Use --quantize for 2-4x faster inference after training
+    - Larger datasets produce better quality models
+    
+EOF
+}
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            print_usage
+            exit 0
+            ;;
+        -d|--dataset)
+            DATASET_SIZE="$2"
+            shift 2
+            ;;
+        --skip-data)
+            SKIP_DATA_GENERATION=true
+            shift
+            ;;
+        --data-dir)
+            DATA_DIR="$2"
+            shift 2
+            ;;
+        -e|--epochs)
+            NUM_EPOCHS="$2"
+            shift 2
+            ;;
+        -b|--batch-size)
+            BATCH_SIZE="$2"
+            shift 2
+            ;;
+        -g|--grad-accum)
+            GRADIENT_ACCUMULATION_STEPS="$2"
+            shift 2
+            ;;
+        -l|--learning-rate)
+            LEARNING_RATE="$2"
+            shift 2
+            ;;
+        -o|--output-dir)
+            OUTPUT_DIR="$2"
+            shift 2
+            ;;
+        -w|--workers)
+            NUM_WORKERS="$2"
+            shift 2
+            ;;
+        -p|--patience)
+            EARLY_STOPPING_PATIENCE="$2"
+            shift 2
+            ;;
+        --no-amp)
+            USE_AMP=false
+            shift
+            ;;
+        --no-checkpointing)
+            USE_GRADIENT_CHECKPOINTING=false
+            shift
+            ;;
+        --quantize)
+            QUANTIZE=true
+            shift
+            ;;
+        *)
+            print_error "Unknown option: $1"
+            print_usage
+            exit 1
+            ;;
+    esac
+done
+
+# Validate dataset size
+case $DATASET_SIZE in
+    quick|small|medium|large|xlarge)
+        ;;
+    *)
+        print_error "Invalid dataset size: $DATASET_SIZE"
+        print_error "Valid options: quick, small, medium, large, xlarge"
+        exit 1
+        ;;
+esac
+
+# Print banner
+echo ""
+echo "╔════════════════════════════════════════════════════════════════╗"
+echo "║         Text-to-LLVM IR Model Training Script                  ║"
+echo "║         Optimized for Best Quality AI in Least Time            ║"
+echo "╚════════════════════════════════════════════════════════════════╝"
+echo ""
+
+# Print configuration
+print_info "Configuration:"
+echo "  Dataset size:              $DATASET_SIZE"
+echo "  Data directory:            $DATA_DIR"
+echo "  Skip data generation:      $SKIP_DATA_GENERATION"
+echo "  Number of epochs:          $NUM_EPOCHS"
+echo "  Batch size:                $BATCH_SIZE"
+echo "  Gradient accumulation:     $GRADIENT_ACCUMULATION_STEPS"
+echo "  Effective batch size:      $((BATCH_SIZE * GRADIENT_ACCUMULATION_STEPS))"
+echo "  Learning rate:             $LEARNING_RATE"
+echo "  Output directory:          $OUTPUT_DIR"
+echo "  Data workers:              $NUM_WORKERS"
+echo "  Early stopping patience:   $EARLY_STOPPING_PATIENCE"
+echo "  Mixed precision (AMP):     $USE_AMP"
+echo "  Gradient checkpointing:    $USE_GRADIENT_CHECKPOINTING"
+echo "  Quantize after training:   $QUANTIZE"
+echo ""
+
+# Check if Python is available
+if ! command -v python3 &> /dev/null; then
+    print_error "Python 3 is not installed. Please install Python 3.8 or higher."
+    exit 1
+fi
+
+PYTHON_CMD="python3"
+
+# Check Python version
+PYTHON_VERSION=$($PYTHON_CMD --version 2>&1 | awk '{print $2}')
+print_info "Using Python $PYTHON_VERSION"
+
+# Check if requirements are installed
+print_info "Checking dependencies..."
+if ! $PYTHON_CMD -c "import torch; import transformers" 2>/dev/null; then
+    print_warning "Required packages not found. Installing dependencies..."
+    $PYTHON_CMD -m pip install -r requirements.txt
+    if [[ $? -eq 0 ]]; then
+        print_success "Dependencies installed successfully"
+    else
+        print_error "Failed to install dependencies"
+        exit 1
+    fi
+else
+    print_success "Dependencies already installed"
+fi
+
+# Detect device (GPU or CPU)
+print_info "Detecting compute device..."
+DEVICE=$($PYTHON_CMD -c "import torch; print('CUDA' if torch.cuda.is_available() else 'CPU')" 2>/dev/null)
+if [[ "$DEVICE" == "CUDA" ]]; then
+    GPU_NAME=$($PYTHON_CMD -c "import torch; print(torch.cuda.get_device_name(0))" 2>/dev/null)
+    print_success "GPU detected: $GPU_NAME"
+    print_info "Training will use GPU acceleration (5-10x faster)"
+else
+    print_warning "No GPU detected. Training will use CPU (slower)"
+    print_info "For faster training, consider using a CUDA-enabled GPU"
+fi
+echo ""
+
+# Step 1: Generate training data
+if [[ "$SKIP_DATA_GENERATION" == true ]]; then
+    print_info "Skipping data generation (using existing dataset)"
+    if [[ ! -d "$DATA_DIR" ]]; then
+        print_error "Data directory '$DATA_DIR' does not exist"
+        exit 1
+    fi
+    if [[ ! -f "$DATA_DIR/train.jsonl" ]] || [[ ! -f "$DATA_DIR/val.jsonl" ]]; then
+        print_error "Required files (train.jsonl, val.jsonl) not found in '$DATA_DIR'"
+        exit 1
+    fi
+else
+    echo "════════════════════════════════════════════════════════════════"
+    echo "Step 1: Generating Training Data"
+    echo "════════════════════════════════════════════════════════════════"
+    echo ""
+    
+    # Determine target examples based on dataset size
+    case $DATASET_SIZE in
+        quick)
+            TARGET_EXAMPLES=1000
+            print_info "Generating quick test dataset (1,000 examples, ~2MB)"
+            ;;
+        small)
+            TARGET_EXAMPLES=50000
+            print_info "Generating small dataset (50,000 examples, ~100MB)"
+            ;;
+        medium)
+            TARGET_EXAMPLES=250000
+            print_info "Generating medium dataset (250,000 examples, ~500MB)"
+            ;;
+        large)
+            TARGET_EXAMPLES=500000
+            print_info "Generating large dataset (500,000 examples, ~1GB)"
+            ;;
+        xlarge)
+            TARGET_EXAMPLES=1000000
+            print_info "Generating extra-large dataset (1,000,000 examples, ~2GB)"
+            ;;
+    esac
+    
+    print_info "This may take several minutes..."
+    echo ""
+    
+    if [[ "$DATASET_SIZE" == "quick" ]]; then
+        $PYTHON_CMD data/generate_data_large.py --quick-test --output-dir "$DATA_DIR"
+    else
+        $PYTHON_CMD data/generate_data_large.py --target-examples $TARGET_EXAMPLES --output-dir "$DATA_DIR"
+    fi
+    
+    if [[ $? -eq 0 ]]; then
+        print_success "Data generation completed successfully"
+        print_info "Dataset saved to: $DATA_DIR"
+    else
+        print_error "Data generation failed"
+        exit 1
+    fi
+    echo ""
+fi
+
+# Step 2: Train the model
+echo "════════════════════════════════════════════════════════════════"
+echo "Step 2: Training the Model"
+echo "════════════════════════════════════════════════════════════════"
+echo ""
+
+print_info "Starting model training..."
+print_info "Training progress will be displayed below"
+echo ""
+
+# Build training command
+TRAIN_CMD="$PYTHON_CMD training/train.py"
+TRAIN_CMD="$TRAIN_CMD --data_dir $DATA_DIR"
+TRAIN_CMD="$TRAIN_CMD --num_epochs $NUM_EPOCHS"
+TRAIN_CMD="$TRAIN_CMD --batch_size $BATCH_SIZE"
+TRAIN_CMD="$TRAIN_CMD --gradient_accumulation_steps $GRADIENT_ACCUMULATION_STEPS"
+TRAIN_CMD="$TRAIN_CMD --learning_rate $LEARNING_RATE"
+TRAIN_CMD="$TRAIN_CMD --output_dir $OUTPUT_DIR"
+TRAIN_CMD="$TRAIN_CMD --num_workers $NUM_WORKERS"
+TRAIN_CMD="$TRAIN_CMD --early_stopping_patience $EARLY_STOPPING_PATIENCE"
+
+if [[ "$USE_AMP" == true ]]; then
+    TRAIN_CMD="$TRAIN_CMD --use_amp"
+fi
+
+if [[ "$USE_GRADIENT_CHECKPOINTING" == true ]]; then
+    TRAIN_CMD="$TRAIN_CMD --use_gradient_checkpointing"
+fi
+
+# Execute training
+eval $TRAIN_CMD
+
+if [[ $? -eq 0 ]]; then
+    print_success "Model training completed successfully"
+    print_info "Model saved to: $OUTPUT_DIR"
+else
+    print_error "Model training failed"
+    exit 1
+fi
+echo ""
+
+# Step 3: Quantize model (optional)
+if [[ "$QUANTIZE" == true ]]; then
+    echo "════════════════════════════════════════════════════════════════"
+    echo "Step 3: Quantizing Model for Faster Inference"
+    echo "════════════════════════════════════════════════════════════════"
+    echo ""
+    
+    QUANTIZED_DIR="${OUTPUT_DIR}_quantized"
+    print_info "Quantizing model to INT8 for 2-4x faster inference..."
+    print_info "Output directory: $QUANTIZED_DIR"
+    echo ""
+    
+    $PYTHON_CMD quantize_model.py \
+        --model_path "$OUTPUT_DIR" \
+        --output_dir "$QUANTIZED_DIR" \
+        --quantization_type dynamic
+    
+    if [[ $? -eq 0 ]]; then
+        print_success "Model quantization completed successfully"
+        print_info "Quantized model saved to: $QUANTIZED_DIR"
+    else
+        print_error "Model quantization failed"
+        exit 1
+    fi
+    echo ""
+fi
+
+# Print summary
+echo "════════════════════════════════════════════════════════════════"
+echo "Training Complete! 🎉"
+echo "════════════════════════════════════════════════════════════════"
+echo ""
+print_success "All steps completed successfully!"
+echo ""
+echo "Summary:"
+echo "  ✓ Dataset generated:     $DATA_DIR"
+echo "  ✓ Model trained:         $OUTPUT_DIR"
+if [[ "$QUANTIZE" == true ]]; then
+    echo "  ✓ Model quantized:       ${OUTPUT_DIR}_quantized"
+fi
+echo ""
+echo "Next Steps:"
+echo ""
+echo "1. Test the model with interactive inference:"
+echo "   ${BLUE}python3 inference.py --model_path $OUTPUT_DIR --interactive${NC}"
+echo ""
+echo "2. Generate LLVM IR from text:"
+echo "   ${BLUE}python3 inference.py --model_path $OUTPUT_DIR --text \"Write a function that adds two integers\"${NC}"
+echo ""
+if [[ "$QUANTIZE" == true ]]; then
+    echo "3. Use quantized model for faster inference:"
+    echo "   ${BLUE}python3 inference.py --model_path ${OUTPUT_DIR}_quantized --interactive${NC}"
+    echo ""
+fi
+echo "For more options, see: ${BLUE}python3 inference.py --help${NC}"
+echo ""
+print_info "Happy coding! 🚀"
+echo ""
