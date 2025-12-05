@@ -8,6 +8,44 @@ This guide shows how to get the best quality AI in the least time.
 pip install -r requirements.txt
 ```
 
+## 🎯 Automated Training (Recommended)
+
+Use the provided training script for the easiest experience:
+
+### Quick Test (Fast)
+```bash
+./train.zsh --dataset quick --epochs 3
+```
+
+### Recommended Setup (Best Balance)
+```bash
+./train.zsh --dataset medium
+```
+
+### Production Quality (Best Results)
+```bash
+./train.zsh --dataset large --epochs 15
+```
+
+### With Quantization (Fastest Inference)
+```bash
+./train.zsh --dataset medium --quantize
+```
+
+**What the script does:**
+1. ✓ Checks and installs dependencies
+2. ✓ Detects GPU/CPU automatically
+3. ✓ Generates training data
+4. ✓ Trains model with optimal settings
+5. ✓ Optionally quantizes for faster inference
+6. ✓ Provides clear next steps
+
+For all options: `./train.zsh --help`
+
+## 📋 Manual Training (Alternative)
+
+If you prefer to run each step manually:
+
 ## Step 1: Generate Optimized Dataset
 
 For quick testing (1000 examples):

@@ -69,7 +69,38 @@ pip install -r requirements.txt
 
 ## Usage
 
-### Generate Training Data
+### 🚀 Quick Start: Automated Training Script (Recommended)
+
+The easiest way to train the model is using the provided training script:
+
+```bash
+# Quick test run (1K examples, fast)
+./train.zsh --dataset quick --epochs 3
+
+# Medium dataset with default settings (recommended for most users)
+./train.zsh --dataset medium
+
+# Large dataset for best quality
+./train.zsh --dataset large --epochs 15
+
+# Custom configuration with quantization
+./train.zsh --dataset medium --epochs 20 --batch-size 16 --quantize
+```
+
+**Features:**
+- ✓ Automatically generates training data
+- ✓ Trains model with optimal settings
+- ✓ Optional model quantization for faster inference
+- ✓ Progress tracking and error handling
+- ✓ GPU/CPU detection and configuration
+
+For all options, run: `./train.zsh --help`
+
+### Manual Training Steps
+
+If you prefer to run each step manually:
+
+#### Generate Training Data
 
 **Quick Test Dataset** (for rapid prototyping):
 
