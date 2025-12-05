@@ -62,14 +62,61 @@ git clone https://github.com/RyAnPr1Me/texttoir.git
 cd texttoir
 ```
 
-2. Install dependencies:
+2. Run the training script (it will install dependencies automatically):
+```bash
+./train.zsh
+```
+
+Or manually install dependencies first:
 ```bash
 pip install -r requirements.txt
 ```
 
 ## Usage
 
-### Generate Training Data
+## 🚀 Quick Start: Automated Training Script (Recommended)
+
+**Perfect for freshly cloned repositories!** The training script handles everything automatically.
+
+```bash
+# After cloning, just run from the repo root:
+cd texttoir
+
+# Large dataset with GPU auto-tuning (RECOMMENDED - default)
+./train.zsh
+
+# Quick test run (1K examples, fast)
+./train.zsh --dataset quick --epochs 3
+
+# Maximum quality with extra-large dataset
+./train.zsh --dataset xlarge --epochs 15
+
+# Custom configuration with quantization for fastest inference
+./train.zsh --dataset large --epochs 20 --quantize
+```
+
+**The script automatically handles:**
+- ✓ Verifies repository structure
+- ✓ Checks Python version (requires 3.8+)
+- ✓ Installs all dependencies from requirements.txt
+- ✓ Detects and optimizes for GPU (5-10x faster)
+- ✓ Generates training data with validation
+- ✓ Trains model with optimal hyperparameters
+- ✓ Optional model quantization
+
+**GPU-Accelerated Features:**
+- ✓ Auto-tunes batch size based on GPU memory
+- ✓ Auto-tunes data workers for maximum throughput
+- ✓ Enables mixed precision (FP16) for 2-3x speedup
+- ✓ Default large dataset (500K examples) for best quality
+- ✓ TF32 support for Ampere+ GPUs (automatic)
+- ✓ Progress tracking and error handling
+
+For all options, run: `./train.zsh --help`
+
+### Manual Training Steps
+
+If you prefer to run each step manually:
 
 **Quick Test Dataset** (for rapid prototyping):
 
