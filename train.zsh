@@ -2,7 +2,10 @@
 
 # Text-to-LLVM IR Model Training Script
 # This script automates the complete workflow for training the model on your device
-# Compatible with both bash and zsh
+# Compatible with both bash and zsh (tested with bash 4.0+, zsh 5.0+)
+#
+# For zsh users: You can also run directly with: zsh train.zsh [options]
+# For bash users: Run with: bash train.zsh [options] or ./train.zsh [options]
 
 set -e  # Exit on error
 
@@ -260,7 +263,7 @@ if [[ "$DEVICE" == "CUDA" ]]; then
     print_info "Applying GPU-specific optimizations for maximum speed..."
     
     # Auto-tune batch size based on GPU memory
-    GPU_MEMORY_INT=${GPU_MEMORY%.*}
+    GPU_MEMORY_INT=${GPU_MEMORY%%.*}  # Remove everything after first dot for integer comparison
     if [[ $GPU_MEMORY_INT -ge 24 ]]; then
         # High-end GPU (24GB+): Use larger batch sizes for maximum speed
         if [[ $BATCH_SIZE -eq 8 ]]; then
@@ -430,27 +433,29 @@ print_info "Starting model training with optimized settings..."
 print_info "Training progress will be displayed below"
 echo ""
 
-# Build training command
-TRAIN_CMD="$PYTHON_CMD training/train.py"
-TRAIN_CMD="$TRAIN_CMD --data_dir $DATA_DIR"
-TRAIN_CMD="$TRAIN_CMD --num_epochs $NUM_EPOCHS"
-TRAIN_CMD="$TRAIN_CMD --batch_size $BATCH_SIZE"
-TRAIN_CMD="$TRAIN_CMD --gradient_accumulation_steps $GRADIENT_ACCUMULATION_STEPS"
-TRAIN_CMD="$TRAIN_CMD --learning_rate $LEARNING_RATE"
-TRAIN_CMD="$TRAIN_CMD --output_dir $OUTPUT_DIR"
-TRAIN_CMD="$TRAIN_CMD --num_workers $NUM_WORKERS"
-TRAIN_CMD="$TRAIN_CMD --early_stopping_patience $EARLY_STOPPING_PATIENCE"
+# Build training command as array for safe execution
+TRAIN_ARGS=(
+    "$PYTHON_CMD" "training/train.py"
+    "--data_dir" "$DATA_DIR"
+    "--num_epochs" "$NUM_EPOCHS"
+    "--batch_size" "$BATCH_SIZE"
+    "--gradient_accumulation_steps" "$GRADIENT_ACCUMULATION_STEPS"
+    "--learning_rate" "$LEARNING_RATE"
+    "--output_dir" "$OUTPUT_DIR"
+    "--num_workers" "$NUM_WORKERS"
+    "--early_stopping_patience" "$EARLY_STOPPING_PATIENCE"
+)
 
 if [[ "$USE_AMP" == true ]]; then
-    TRAIN_CMD="$TRAIN_CMD --use_amp"
+    TRAIN_ARGS+=("--use_amp")
 fi
 
 if [[ "$USE_GRADIENT_CHECKPOINTING" == true ]]; then
-    TRAIN_CMD="$TRAIN_CMD --use_gradient_checkpointing"
+    TRAIN_ARGS+=("--use_gradient_checkpointing")
 fi
 
-# Execute training
-eval $TRAIN_CMD
+# Execute training safely with array expansion
+"${TRAIN_ARGS[@]}"
 
 if [[ $? -eq 0 ]]; then
     print_success "Model training completed successfully"
